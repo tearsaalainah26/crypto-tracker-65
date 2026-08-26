@@ -1,48 +1,32 @@
-"""Helper functions for formatting and calculations in crypto-tracker-65."""
+import logging
+from decimal import Decimal, InvalidOperation
 
-from typing import Dict, Union
+logger = logging.getLogger("crypto-tracker-65")
 
+def format_currency(amount: float, currency_symbol: str = "$") -> str:
+    """Format a numeric amount into a standard currency string."""
+    try:
+        dec_amount = Decimal(str(amount))
+        return f"{currency_symbol}{dec_amount:,.2f}"
+    except (InvalidOperation, TypeError) as e:
+        logger.error(f"Failed to format currency for value {amount}: {e}")
+        return f"{currency_symbol}0.00"
 
-def format_currency(amount: Union[float, int], currency_symbol: str = "$") -> str:
-    """Format a numeric crypto amount into a readable currency string.
-    
-    Args:
-        amount: The monetary value to format.
-        currency_symbol: The symbol to prepend.
-        
-    Returns:
-        Formatted string with two decimal places and commas.
-    """
-    return f"{currency_symbol}{amount:,.2f}"
-
-
-def calculate_percentage_change(old_price: float, new_price: float) -> float:
-    """Calculate the percentage change between two prices.
-    
-    Args:
-        old_price: The baseline price.
-        new_price: The current price.
-        
-    Returns:
-        Percentage difference as a float.
-    """
-    if old_price == 0.0:
+def calculate_percentage_change(old_value: float, new_value: float) -> float:
+    """Calculate the percentage change between two price points."""
+    if old_value == 0:
         return 0.0
-    return ((new_price - old_price) / old_price) * 100.0
+    try:
+        old_dec = Decimal(str(old_value))
+        new_dec = Decimal(str(new_value))
+        change = ((new_dec - old_dec) / old_dec) * Decimal("100")
+        return float(change.quantize(Decimal("0.01")))
+    except (InvalidOperation, TypeError) as e:
+        logger.error(f"Failed to calculate percentage change: {e}")
+        return 0.0
 
-
-def parse_ticker_data(raw_data: Dict[str, Union[str, float]]) -> Dict[str, Union[str, float]]:
-    """Sanitize and structure raw ticker data from exchanges.
-    
-    Args:
-        raw_data: Dictionary containing raw API response fields.
-        
-    Returns:
-        Cleaned dictionary with standardized keys and types.
-    """
-    cleaned: Dict[str, Union[str, float]] = {
-        "symbol": str(raw_data.get("symbol", "UNKNOWN")).upper(),
-        "price": float(raw_data.get("price", 0.0)),
-        "volume": float(raw_data.get("volume", 0.0))
-    }
-    return cleaned
+def sanitize_symbol(symbol: str) -> str:
+    """Clean and normalize a cryptocurrency trading symbol."""
+    if not isinstance(symbol, str):
+        return ""
+    return symbol.strip().upper()

@@ -1,73 +1,59 @@
-import json
 import os
-from pathlib import Path
-from typing import Any, Dict, Optional
+import json
+from typing import Any, Dict, List
+
+DEFAULT_CONFIG = {
+    "API_KEY": "",
+    "BASE_CURRENCY": "USD",
+    "UPDATE_INTERVAL_SECONDS": "60",
+    "LOG_LEVEL": "INFO",
+    "TRACKED_COINS": "bitcoin,ethereum,solana",
+    "COINGECKO_API_URL": "https://api.coingecko.com/api/v3"
+}
 
 class ConfigLoader:
-    """Configuration loader with defaults for crypto tracker."""
+    def __init__(self, config_file_path: str = "config.json"):
+        self.config_file_path = config_file_path
+        self.settings: Dict[str, Any] = {}
+        self.load_configuration()
 
-    DEFAULTS = {
-        "api_key": "",
-        "exchange": "binance",
-        "base_url": "https://api.binance.com/api/v3",
-        "tracked_assets": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
-        "poll_interval": 30,
-        "alert_threshold": 5.0,
-        "log_level": "INFO",
-        "cache_ttl": 300,
-    }
+    def load_configuration(self) -> None:
+        # Initialize settings with hardcoded defaults
+        self.settings = DEFAULT_CONFIG.copy()
 
-    def __init__(self, config_path: Optional[str] = None) -> None:
-        self.config_path = Path(config_path or "config.json")
-        self.config: Dict[str, Any] = self.DEFAULTS.copy()
-        self._load_from_file()
-        self._load_from_env()
-
-    def _load_from_file(self) -> None:
-        if self.config_path.exists():
+        # Override with JSON config file if present and valid
+        if os.path.exists(self.config_file_path):
             try:
-                with self.config_path.open("r") as f:
-                    user_config = json.load(f)
-                    if isinstance(user_config, dict):
-                        self.config.update(user_config)
-            except (json.JSONDecodeError, OSError) as exc:
-                # Use defaults if file is invalid
+                with open(self.config_file_path, "r", encoding="utf-8") as f:
+                    file_data = json.load(f)
+                    if isinstance(file_data, dict):
+                        for key, value in file_data.items():
+                            self.settings[key.upper()] = str(value)
+            except (json.JSONDecodeError, IOError):
+                # Fallback to defaults if configuration file is corrupted
                 pass
 
-    def _load_from_env(self) -> None:
-        prefix = "CRYPTO_"
-        for key in self.DEFAULTS:
-            env_var = prefix + key.upper()
-            if env_var in os.environ:
-                value = os.environ[env_var]
-                orig = self.DEFAULTS[key]
-                if isinstance(orig, bool):
-                    value = value.lower() in ("true", "1", "yes")
-                elif isinstance(orig, int):
-                    try:
-                        value = int(value)
-                    except ValueError:
-                        continue
-                elif isinstance(orig, float):
-                    try:
-                        value = float(value)
-                    except ValueError:
-                        continue
-                self.config[key] = value
+        # Override with environment variables prefixed with CRYPTO_
+        for key in DEFAULT_CONFIG:
+            env_value = os.environ.get(f"CRYPTO_{key}")
+            if env_value is not None:
+                self.settings[key] = env_value
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
-        return self.config.get(key, default)
+    def get_api_key(self) -> str:
+        return self.settings.get("API_KEY", "")
 
-    def get_all(self) -> Dict[str, Any]:
-        return self.config.copy()
+    def get_base_currency(self) -> str:
+        return self.settings.get("BASE_CURRENCY", "USD").upper()
 
-    def update(self, updates: Dict[str, Any]) -> None:
-        self.config.update(updates)
-
-    def save(self) -> bool:
+    def get_update_interval(self) -> int:
         try:
-            with self.config_path.open("w") as f:
-                json.dump(self.config, f, indent=2)
-            return True
-        except OSError:
-            return False
+            return int(self.settings.get("UPDATE_INTERVAL_SECONDS", 60))
+        except ValueError:
+            return 60
+
+    def get_tracked_coins(self) -> List[str]:
+        coins_raw = self.settings.get("TRACKED_COINS", "")
+        return [coin.strip().lower() for coin in coins_raw.split(",") if coin.strip()]
+
+    def get_api_url(self) -> str:
+        return self.settings.get("COINGECKO_API_URL", "https://api.coingecko.com/api/v3")

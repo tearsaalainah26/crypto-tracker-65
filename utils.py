@@ -1,33 +1,34 @@
-import time
-import functools
-import requests
-from typing import Callable, Any
+import json
+from typing import Dict, Any, Optional
 
-def with_retry(max_attempts: int = 3, delay: float = 2.0):
+def format_crypto_data(data: Dict[str, Any], currency: str = 'USD') -> Dict[str, Any]:
     """
-    Decorator for retrying network operations on failure.
+    standardizes incoming crypto API responses into a 
+    uniform application schema for crypto-tracker-65.
     """
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            last_exception = None
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except (requests.exceptions.RequestException, ConnectionError) as e:
-                    last_exception = e
-                    if attempt < max_attempts - 1:
-                        time.sleep(delay * (attempt + 1))
-                        continue
-            raise last_exception
-        return wrapper
-    return decorator
+    try:
+        base_info = {
+            "symbol": data.get("symbol", "UNKNOWN").upper(),
+            "price": float(data.get("price_usd", 0.0)),
+            "volume_24h": float(data.get("volume_24h", 0.0)),
+            "market_cap": float(data.get("market_cap", 0.0)),
+            "currency": currency
+        }
+        return base_info
+    except (ValueError, TypeError) as e:
+        return {"error": "data parsing failure", "details": str(e)}
 
-@with_retry(max_attempts=3, delay=1.0)
-def fetch_crypto_price(url: str) -> dict:
+def calculate_percentage_change(current: float, previous: float) -> float:
     """
-    Example network call to fetch price data.
+    computes the percentage change between two price points.
+    returns 0.0 if previous price is zero.
     """
-    response = requests.get(url, timeout=10)
-    response.raise_for_status()
-    return response.json()
+    if previous == 0:
+        return 0.0
+    return ((current - previous) / previous) * 100
+
+def validate_ticker(ticker: str) -> bool:
+    """
+    ensures ticker format conforms to crypto standards.
+    """
+    return isinstance(ticker, str) and 2 <= len(ticker) <= 10

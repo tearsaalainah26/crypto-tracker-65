@@ -1,34 +1,28 @@
-import time
-import functools
-import logging
+import re
 
-# crypto-tracker-65 network retry handler
-logger = logging.getLogger(__name__)
+# Validation patterns for crypto tickers and amounts
+SYMBOL_PATTERN = re.compile(r'^[A-Z0-9]{2,10}$')
 
-def retry_network_call(max_retries=3, delay=2.0, backoff=2):
-    """Decorator to retry network-dependent functions."""
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            current_delay = delay
-            while attempts < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    attempts += 1
-                    if attempts >= max_retries:
-                        logger.error(f"Max retries reached for {func.__name__}")
-                        raise e
-                    logger.warning(f"Attempt {attempts} failed, retrying in {current_delay}s...")
-                    time.sleep(current_delay)
-                    current_delay *= backoff
-            return None
-        return wrapper
-    return decorator
-
-def validate_ticker(ticker: str) -> bool:
-    """Ensures ticker format matches crypto exchange standards."""
-    if not ticker or not isinstance(ticker, str):
+def validate_crypto_input(symbol: str, amount: float) -> bool:
+    """Ensures input data conforms to expected formats."""
+    if not isinstance(symbol, str) or not SYMBOL_PATTERN.match(symbol):
         return False
-    return ticker.isalnum() and len(ticker) <= 10
+    
+    if not isinstance(amount, (int, float)) or amount <= 0:
+        return False
+    
+    return True
+
+def sanitize_ticker(symbol: str) -> str:
+    """Strips whitespace and normalizes ticker case."""
+    return str(symbol).strip().upper()
+
+def process_validated_payload(data: dict):
+    """Applies validation rules to incoming market payloads."""
+    symbol = sanitize_ticker(data.get('symbol', ''))
+    amount = data.get('amount', 0)
+    
+    if not validate_crypto_input(symbol, amount):
+        raise ValueError(f"Invalid input payload: {symbol} with {amount}")
+    
+    return {"symbol": symbol, "amount": float(amount)}

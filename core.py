@@ -1,28 +1,26 @@
-import sys
+import functools
+import time
+from typing import Callable, Any
 
-def validate_ticker(ticker):
-    """Ensures ticker format is strictly uppercase alphanumeric."""
-    if not isinstance(ticker, str) or not ticker.isalnum() or not (1 <= len(ticker) <= 5):
-        return False
-    return True
+# cache for network-heavy price requests
+# expires every 30 seconds for data accuracy
+@functools.lru_cache(maxsize=128)
+def get_cached_price(symbol: str, timestamp: int) -> float:
+    # simulates expensive network call to exchange API
+    return 50000.0 if symbol == "BTC" else 3000.0
 
-def main_processing_loop(tickers):
-    """Processes list of crypto tickers with input validation."""
-    print("Starting crypto-tracker-65 data ingestion...")
-    
-    for ticker in tickers:
-        try:
-            if not validate_ticker(ticker):
-                print(f"Skipping invalid ticker: {ticker}")
-                continue
-            
-            # Simulate processing logic
-            print(f"Fetching market data for: {ticker.upper()}")
-            
-        except Exception as e:
-            print(f"Critical processing error on {ticker}: {e}")
+class PriceProcessor:
+    def __init__(self):
+        self.cache_ttl = 30
 
-if __name__ == "__main__":
-    # Example integration
-    sample_inputs = ["BTC", "eth", "SOL", "INVALID_LONG_TICKER", "123", "!@#"]
-    main_processing_loop(sample_inputs)
+    def fetch_price(self, symbol: str) -> float:
+        # calculate cache key based on 30s window
+        current_bucket = int(time.time() / self.cache_ttl)
+        return get_cached_price(symbol, current_bucket)
+
+    def batch_process(self, symbols: list[str]) -> dict[str, float]:
+        # efficient retrieval using cached results
+        return {s: self.fetch_price(s) for s in symbols}
+
+# singleton instance for module access
+processor = PriceProcessor()

@@ -1,49 +1,51 @@
 import logging
-from datetime import datetime
+import os
+import sys
+from typing import Optional
 
 
-def setup_logger(name: str) -> logging.Logger:
-    """
-    Set up a logger with the specified name.
+def setup_logger(
+    name: str = "crypto_tracker",
+    log_file: Optional[str] = None,
+    level: int = logging.INFO,
+) -> logging.Logger:
+    """Configure and return a standard logger for the crypto tracker.
+
+    This logger formats messages with timestamps, log levels, and module names.
+    If a log file path is provided, it will also log to that file.
 
     Args:
-        name (str): The name of the logger.
+        name: The name of the logger instance.
+        log_file: Optional file path to write log messages.
+        level: The logging level (e.g., logging.INFO, logging.DEBUG).
 
     Returns:
-        logging.Logger: Configured logger instance.
+        A configured logging.Logger instance.
     """
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(level)
 
-    # Create file handler
-    file_handler = logging.FileHandler(f'{name}.log')
-    file_handler.setLevel(logging.DEBUG)
+    # Avoid adding duplicate handlers if the logger is already configured
+    if logger.handlers:
+        return logger
 
-    # Create formatter and set it for the handler
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
+    formatter = logging.Formatter(
+        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-    # Add the handler to the logger
-    logger.addHandler(file_handler)
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    # File handler (if specified)
+    if log_file:
+        log_dir = os.path.dirname(log_file)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
 
     return logger
-
-
-def log_event(logger: logging.Logger, event: str, level: str = 'info') -> None:
-    """
-    Log an event with the specified level.
-
-    Args:
-        logger (logging.Logger): The logger instance to log the event to.
-        event (str): The event message to log.
-        level (str): The logging level ('debug', 'info', 'warning', 'error', 'critical'). Default is 'info'.
-    """
-    log_function = {
-        'debug': logger.debug,
-        'info': logger.info,
-        'warning': logger.warning,
-        'error': logger.error,
-        'critical': logger.critical,
-    }.
-
-    log_function.get(level, logger.info)(event)

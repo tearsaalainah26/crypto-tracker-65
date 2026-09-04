@@ -1,33 +1,36 @@
+"""
+Custom exceptions for the crypto-tracker-65 application.
+Defines specific error types for API failures, rate limits, and validation.
+"""
+
 class CryptoTrackerError(Exception):
-    """Base exception for the crypto-tracker-65 application."""
+    """Base exception class for all crypto tracker errors."""
     pass
+
 
 class APIConnectionError(CryptoTrackerError):
-    """Raised when external crypto API connectivity fails."""
-    pass
+    """Raised when the application fails to connect to the crypto API provider."""
+    def __init__(self, message: str = "Failed to connect to the cryptocurrency API"):
+        super().__init__(message)
 
-class RateLimitExceeded(CryptoTrackerError):
-    """Raised when API request thresholds are reached."""
-    pass
 
-class DataParsingError(CryptoTrackerError):
-    """Raised when incoming JSON data is malformed."""
-    pass
+class RateLimitExceededError(APIConnectionError):
+    """Raised when the API request rate limit has been exceeded."""
+    def __init__(self, retry_after: int = None):
+        message = "Rate limit exceeded."
+        if retry_after:
+            message += f" Please retry after {retry_after} seconds."
+        super().__init__(message)
+        self.retry_after = retry_after
 
-class InvalidCurrencyPairError(CryptoTrackerError):
-    """Raised when the requested symbol is not supported."""
-    pass
 
-class InsufficientBalanceError(CryptoTrackerError):
-    """Raised for trades exceeding available wallet funds."""
-    pass
+class InvalidTickerError(CryptoTrackerError):
+    """Raised when a requested cryptocurrency ticker is invalid or unsupported."""
+    def __init__(self, ticker: str):
+        self.ticker = ticker
+        super().__init__(f"The cryptocurrency ticker '{ticker}' is not supported.")
 
-def handle_crypto_exception(e: Exception) -> str:
-    """Converts internal exceptions to user-friendly messages."""
-    if isinstance(e, RateLimitExceeded):
-        return "API limit reached, please retry later."
-    if isinstance(e, DataParsingError):
-        return "Failed to parse response from market data provider."
-    if isinstance(e, InvalidCurrencyPairError):
-        return "The requested cryptocurrency pair is currently unavailable."
-    return "An unexpected error occurred during data processing."
+
+class CacheMissError(CryptoTrackerError):
+    """Raised when requested historical data is missing from the local cache."""
+    pass

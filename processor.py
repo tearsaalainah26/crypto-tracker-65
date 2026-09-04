@@ -1,29 +1,24 @@
-from typing import List, Dict, Optional
+import time
+import json
+import urllib.request
+import urllib.error
+import logging
 
-def calculate_portfolio_value(holdings: List[Dict], prices: Dict[str, float]) -> float:
-    """Calculates total value of crypto holdings based on market prices."""
-    total_value = 0.0
-    for holding in holdings:
-        symbol = holding.get("symbol")
-        amount = holding.get("amount", 0.0)
-        if symbol in prices:
-            total_value += amount * prices[symbol]
-    return round(total_value, 2)
+logger = logging.getLogger(__name__)
 
-def format_price_change(change_percent: float) -> str:
-    """Formats price percentage change for display."""
-    sign = "+" if change_percent > 0 else ""
-    return f"{sign}{change_percent:.2f}%"
-
-def filter_by_threshold(market_data: List[Dict], threshold: float) -> List[Dict]:
-    """Filters crypto assets exceeding a specific volume threshold."""
-    return [item for item in market_data if item.get("volume", 0) >= threshold]
-
-def normalize_symbol(symbol: str) -> str:
-    """Standardizes ticker symbols to uppercase."""
-    return symbol.strip().upper()
-
-def get_asset_info(data: Dict, symbol: str) -> Optional[Dict]:
-    """Retrieves specific asset metadata from response object."""
-    normalized = normalize_symbol(symbol)
-    return data.get(normalized, None)
+def fetch_crypto_data(url: str, max_retries: int = 3, backoff_factor: float = 1.5) -> dict:
+    """Fetch cryptocurrency data from an external API with retry logic."""
+    delay = 1.0
+    for attempt in range(1, max_retries + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "CryptoTracker/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as err:
+            logger.warning("Attempt %d failed for %s: %s", attempt, url, err)
+            if attempt == max_retries:
+                logger.error("Maximum retries reached for %s", url)
+                raise
+            time.sleep(delay)
+            delay *= backoff_factor
+    return {}

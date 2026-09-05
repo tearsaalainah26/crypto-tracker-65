@@ -1,42 +1,33 @@
-import math
-from typing import List, Dict, Optional
+from typing import Dict, Any, Optional
+import logging
 
+logger = logging.getLogger(__name__)
 
-def format_crypto_price(price: float, currency_symbol: str = "$") -> str:
-    """Format a cryptocurrency price with appropriate decimal precision."""
-    if price is None:
-        return f"{currency_symbol}0.00"
-    if price >= 1.0:
-        return f"{currency_symbol}{price:,.2f}"
-    elif price >= 0.0001:
-        return f"{currency_symbol}{price:,.4f}"
-    else:
-        return f"{currency_symbol}{price:,.8f}"
+def format_currency(amount: float, symbol: str = 'USD') -> str:
+    """Formats a numerical value into a human-readable currency string."""
+    try:
+        return f"{amount:,.2f} {symbol}"
+    except (ValueError, TypeError) as e:
+        logger.error(f"Formatting error for amount {amount}: {e}")
+        return f"0.00 {symbol}"
 
+def calculate_percentage_change(current: float, previous: float) -> float:
+    """Calculates the percentage change between two price points."""
+    if previous == 0:
+        return 0.0
+    return ((current - previous) / abs(previous)) * 100
 
-def calculate_price_change(current: float, previous: float) -> Dict[str, float]:
-    """Calculate absolute and percentage price change between two points."""
-    if not previous or previous == 0:
-        return {"absolute": 0.0, "percentage": 0.0}
+def sanitize_ticker(symbol: str) -> str:
+    """Normalizes ticker symbols to uppercase alphanumeric format."""
+    return "".join(char for char in symbol.upper() if char.isalnum())
 
-    diff = current - previous
-    percentage = (diff / previous) * 100.0
-    return {"absolute": round(diff, 8), "percentage": round(percentage, 2)}
-
-
-def normalize_ticker_symbol(symbol: str) -> str:
-    """Clean and normalize cryptocurrency ticker symbols."""
-    if not symbol:
-        return ""
-    cleaned = symbol.strip().upper()
-    for delimiter in ["/", "-", "_", " "]:
-        cleaned = cleaned.replace(delimiter, "")
-    return cleaned
-
-
-def calculate_simple_moving_average(prices: List[float], period: int) -> Optional[float]:
-    """Calculate the Simple Moving Average (SMA) for closing prices."""
-    if not prices or len(prices) < period or period <= 0:
-        return None
-    recent_prices = prices[-period:]
-    return round(sum(recent_prices) / period, 8)
+def parse_api_response(data: Dict[str, Any], key: str) -> Optional[Any]:
+    """Safely extracts a nested value from a crypto API response dict."""
+    keys = key.split('.')
+    current = data
+    for k in keys:
+        if isinstance(current, dict):
+            current = current.get(k)
+        else:
+            return None
+    return current

@@ -1,51 +1,71 @@
 import logging
-import os
 import sys
 from typing import Optional
 
 
-def setup_logger(
-    name: str = "crypto_tracker",
-    log_file: Optional[str] = None,
-    level: int = logging.INFO,
-) -> logging.Logger:
-    """Configure and return a standard logger for the crypto tracker.
+class CryptoTrackerLogger:
+    """Custom logger wrapper for crypto market monitoring and alerting."""
 
-    This logger formats messages with timestamps, log levels, and module names.
-    If a log file path is provided, it will also log to that file.
+    def __init__(
+        self, name: str = "crypto_tracker", log_level: int = logging.INFO
+    ) -> None:
+        """Initialize the logger with standard output and formatting.
+
+        Args:
+            name: The module or component name for the logger.
+            log_level: Numeric logging level (e.g., logging.INFO, logging.DEBUG).
+        """
+        self.logger: logging.Logger = logging.getLogger(name)
+        self.logger.setLevel(log_level)
+
+        if not self.logger.handlers:
+            handler: logging.Handler = logging.StreamHandler(sys.stdout)
+            formatter: logging.Formatter = logging.Formatter(
+                "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+
+    def log_price_alert(
+        self, symbol: str, price: float, threshold: float
+    ) -> None:
+        """Log a price threshold breach for a specific cryptocurrency.
+
+        Args:
+            symbol: Ticker symbol of the asset (e.g., BTC, ETH).
+            price: Current market price of the asset.
+            threshold: The target price threshold that was crossed.
+        """
+        self.logger.warning(
+            f"ALERT: {symbol.upper()} crossed threshold! Current: ${price:,.2f} | Threshold: ${threshold:,.2f}"
+        )
+
+    def log_api_status(
+        self, endpoint: str, status_code: int, response_time_ms: float
+    ) -> None:
+        """Log execution metrics for external exchange API calls.
+
+        Args:
+            endpoint: API endpoint URL or route name.
+            status_code: HTTP response status code.
+            response_time_ms: Response time in milliseconds.
+        """
+        msg: str = f"API Call: {endpoint} | Status: {status_code} | Latency: {response_time_ms:.1f}ms"
+        if status_code >= 400:
+            self.logger.error(msg)
+        else:
+            self.logger.info(msg)
+
+
+def get_logger(name: Optional[str] = None) -> logging.Logger:
+    """Utility function to retrieve a configured logger instance.
 
     Args:
-        name: The name of the logger instance.
-        log_file: Optional file path to write log messages.
-        level: The logging level (e.g., logging.INFO, logging.DEBUG).
+        name: Optional logger name suffix.
 
     Returns:
-        A configured logging.Logger instance.
+        Configured logging.Logger object.
     """
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-
-    # Avoid adding duplicate handlers if the logger is already configured
-    if logger.handlers:
-        return logger
-
-    formatter = logging.Formatter(
-        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-
-    # File handler (if specified)
-    if log_file:
-        log_dir = os.path.dirname(log_file)
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir, exist_ok=True)
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-
-    return logger
+    logger_name: str = f"crypto_tracker.{name}" if name else "crypto_tracker"
+    return CryptoTrackerLogger(logger_name).logger

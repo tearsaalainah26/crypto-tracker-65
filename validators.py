@@ -1,28 +1,28 @@
 import re
 
-# Validation patterns for crypto tickers and amounts
-SYMBOL_PATTERN = re.compile(r'^[A-Z0-9]{2,10}$')
+# Allowed cryptocurrency symbols for validation
+VALID_SYMBOLS = {'BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'XRP'}
 
-def validate_crypto_input(symbol: str, amount: float) -> bool:
-    """Ensures input data conforms to expected formats."""
-    if not isinstance(symbol, str) or not SYMBOL_PATTERN.match(symbol):
+def validate_ticker(symbol: str) -> bool:
+    """Ensures symbol is uppercase and in supported list."""
+    if not isinstance(symbol, str):
         return False
-    
-    if not isinstance(amount, (int, float)) or amount <= 0:
+    return symbol.upper() in VALID_SYMBOLS
+
+def validate_amount(amount: float) -> bool:
+    """Checks for non-negative numerical input."""
+    try:
+        val = float(amount)
+        return val > 0
+    except (ValueError, TypeError):
         return False
-    
-    return True
 
-def sanitize_ticker(symbol: str) -> str:
-    """Strips whitespace and normalizes ticker case."""
-    return str(symbol).strip().upper()
+def validate_api_key(key: str) -> bool:
+    """Basic format validation for crypto exchange keys."""
+    # Matches alphanumeric keys of length 32-64
+    pattern = r'^[a-zA-Z0-9]{32,64}$'
+    return bool(re.match(pattern, key))
 
-def process_validated_payload(data: dict):
-    """Applies validation rules to incoming market payloads."""
-    symbol = sanitize_ticker(data.get('symbol', ''))
-    amount = data.get('amount', 0)
-    
-    if not validate_crypto_input(symbol, amount):
-        raise ValueError(f"Invalid input payload: {symbol} with {amount}")
-    
-    return {"symbol": symbol, "amount": float(amount)}
+def sanitize_input(user_input: str) -> str:
+    """Removes whitespace and forces casing for uniformity."""
+    return str(user_input).strip().upper()

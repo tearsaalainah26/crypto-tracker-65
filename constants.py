@@ -1,33 +1,28 @@
-import logging
+import enum
+from typing import Final
 
-# Configuration constants for crypto-tracker-65
-# Includes safe default values and error message strings
+# caching constants for ticker operations
+CACHE_TTL: Final[int] = 300
+MAX_RETRIES: Final[int] = 3
+REQUEST_TIMEOUT: Final[float] = 10.0
 
-API_TIMEOUT_SECONDS = 30
-MAX_RETRIES = 3
-BACKOFF_FACTOR = 0.5
+# supported trading pairs
+SUPPORTED_PAIRS: Final[list[str]] = [
+    "BTC-USD",
+    "ETH-USD",
+    "SOL-USD",
+    "ADA-USD"
+]
 
-HTTP_STATUS_MESSAGES = {
-    400: "Bad request: Check input parameters.",
-    401: "Unauthorized: API key invalid.",
-    403: "Forbidden: Access denied to exchange.",
-    404: "Not found: Endpoint does not exist.",
-    429: "Rate limit exceeded: Please slow down requests.",
-    500: "Internal server error: Exchange services unstable.",
-    503: "Service unavailable: Server is currently overloaded."
-}
+class ExchangeStatus(enum.IntEnum):
+    OPERATIONAL = 1
+    MAINTENANCE = 2
+    DISCONNECTED = 3
 
-SUPPORTED_EXCHANGES = ['binance', 'coinbase', 'kraken']
-DEFAULT_CURRENCY = 'USD'
+# connection pool limits for performance
+MAX_CONCURRENT_REQUESTS: Final[int] = 10
+API_RATE_LIMIT_DELAY: Final[float] = 0.5
 
-def get_error_message(status_code: int) -> str:
-    """Returns descriptive message for standard HTTP status codes."""
-    return HTTP_STATUS_MESSAGES.get(status_code, "Unknown API connection error occurred.")
-
-# Configure global logging settings for monitoring
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-
-logger = logging.getLogger('crypto-tracker-65')
+def get_cache_key(pair: str) -> str:
+    """generate standardized cache key"""
+    return f"ticker:{pair.lower()}"

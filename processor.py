@@ -1,24 +1,39 @@
-import time
-import json
-import urllib.request
-import urllib.error
-import logging
+import functools
+from typing import Dict, List
 
-logger = logging.getLogger(__name__)
+# Cache for crypto price calculations to reduce CPU overhead
+@functools.lru_cache(maxsize=128)
+def calculate_portfolio_value(prices: Dict[str, float], holdings: Dict[str, float]) -> float:
+    """Calculates total value using cached lookups for performance."""
+    total = 0.0
+    for coin, amount in holdings.items():
+        price = prices.get(coin, 0.0)
+        total += price * amount
+    return total
 
-def fetch_crypto_data(url: str, max_retries: int = 3, backoff_factor: float = 1.5) -> dict:
-    """Fetch cryptocurrency data from an external API with retry logic."""
-    delay = 1.0
-    for attempt in range(1, max_retries + 1):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "CryptoTracker/1.0"})
-            with urllib.request.urlopen(req, timeout=10) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as err:
-            logger.warning("Attempt %d failed for %s: %s", attempt, url, err)
-            if attempt == max_retries:
-                logger.error("Maximum retries reached for %s", url)
-                raise
-            time.sleep(delay)
-            delay *= backoff_factor
-    return {}
+class DataProcessor:
+    """High-performance data processing for crypto-tracker-65."""
+    def __init__(self, batch_size: int = 100):
+        self.batch_size = batch_size
+
+    def process_market_data(self, data: List[Dict]) -> List[Dict]:
+        """Efficient batch processing of raw market ticks."""
+        if not data:
+            return []
+        
+        # Use list comprehension for faster iteration
+        return [
+            {
+                'symbol': item.get('s'),
+                'price': float(item.get('p', 0)),
+                'volume': float(item.get('v', 0))
+            }
+            for item in data
+        ]
+
+    def get_summary(self, prices: Dict, holdings: Dict) -> Dict:
+        """Provides optimized calculation interface."""
+        return {
+            'total_value': calculate_portfolio_value(tuple(sorted(prices.items())), tuple(sorted(holdings.items()))),
+            'asset_count': len(holdings)
+        }

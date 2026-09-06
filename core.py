@@ -1,26 +1,42 @@
-import functools
 import time
+import logging
+import requests
+from functools import wraps
 from typing import Callable, Any
 
-# cache for network-heavy price requests
-# expires every 30 seconds for data accuracy
-@functools.lru_cache(maxsize=128)
-def get_cached_price(symbol: str, timestamp: int) -> float:
-    # simulates expensive network call to exchange API
-    return 50000.0 if symbol == "BTC" else 3000.0
+logger = logging.getLogger('crypto-tracker-65')
 
-class PriceProcessor:
-    def __init__(self):
-        self.cache_ttl = 30
+def retry_request(max_retries: int = 3, delay: int = 2):
+    """Decorator to retry network requests on failure."""
+    def decorator(func: Callable):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except (requests.exceptions.RequestException, ConnectionError) as e:
+                    last_exception = e
+                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+                    time.sleep(delay)
+            logger.error(f"Failed after {max_retries} attempts: {last_exception}")
+            raise last_exception
+        return wrapper
+    return decorator
 
-    def fetch_price(self, symbol: str) -> float:
-        # calculate cache key based on 30s window
-        current_bucket = int(time.time() / self.cache_ttl)
-        return get_cached_price(symbol, current_bucket)
+@retry_request(max_retries=3, delay=5)
+def fetch_price(symbol: str) -> float:
+    """Fetch current price for a crypto asset."""
+    url = f"https://api.crypto-tracker.com/v1/ticker/{symbol}"
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+    return float(data['price'])
 
-    def batch_process(self, symbols: list[str]) -> dict[str, float]:
-        # efficient retrieval using cached results
-        return {s: self.fetch_price(s) for s in symbols}
-
-# singleton instance for module access
-processor = PriceProcessor()
+if __name__ == "__main__":
+    # Example usage for tracker core
+    try:
+        btc_price = fetch_price("BTC")
+        print(f"Current BTC Price: {btc_price}")
+    except Exception as e:
+        print(f"Operation failed: {e}")

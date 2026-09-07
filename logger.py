@@ -1,30 +1,43 @@
 import logging
-import sys
-from typing import Optional
+from logging.handlers import RotatingFileHandler
+import os
 
-def setup_logger(name: str = 'crypto-tracker-65') -> logging.Logger:
-    """Configures a standardized logger with robust error handling."""
+
+def setup_logger(
+    name: str = "crypto_tracker",
+    log_file: str = "crypto_tracker.log",
+    level: int = logging.INFO,
+    max_bytes: int = 5 * 1024 * 1024,
+    backup_count: int = 3,
+) -> logging.Logger:
+    """Configures and returns a logger with rotating file and console handlers."""
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)
 
-    if not logger.handlers:
-        try:
-            handler = logging.StreamHandler(sys.stdout)
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-        except (OSError, ValueError) as e:
-            sys.stderr.write(f'failed to initialize logger: {e}\n')
-            
+    if logger.handlers:
+        return logger
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+
+    log_dir = os.path.dirname(log_file)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=max_bytes, backupCount=backup_count
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
     return logger
 
-def safe_log_error(logger: logging.Logger, message: str, error: Optional[Exception] = None) -> None:
-    """Logs errors safely ensuring program execution continues."""
-    try:
-        if error:
-            logger.error(f'{message} | Error: {type(error).__name__} - {str(error)}')
-        else:
-            logger.error(message)
-    except Exception as e:
-        # Fallback if logging infrastructure fails entirely
-        print(f'Critical logger failure: {e}', file=sys.stderr)
+
+if __name__ == "__main__":
+    app_logger = setup_logger()
+    app_logger.info("Crypto tracker logger initialized successfully.")

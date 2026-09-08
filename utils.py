@@ -1,49 +1,24 @@
-from typing import Dict, Tuple
+from typing import Dict, Any, Optional
 
+def format_currency(value: float, currency: str = "USD") -> str:
+    """Formats a numeric value into a localized currency string representation."""
+    if currency.upper() == "USD":
+        if value >= 1.0:
+            return f"${value:,.2f}"
+        return f"${value:,.6f}"
+    return f"{value:,.4f} {currency.upper()}"
 
-def calculate_price_metrics(
-    current_price: float, previous_price: float
-) -> Dict[str, float]:
-    """Calculate absolute and percentage change between two price points."""
-    if previous_price <= 0:
-        raise ValueError("Previous price must be greater than zero")
+def calculate_percentage_change(old_price: float, new_price: float) -> float:
+    """Calculates the percentage change between two numeric price points."""
+    if old_price <= 0:
+        return 0.0
+    change = ((new_price - old_price) / old_price) * 100
+    return round(change, 2)
 
-    absolute_change = current_price - previous_price
-    percentage_change = (absolute_change / previous_price) * 100
-
-    return {
-        "current_price": round(current_price, 8),
-        "previous_price": round(previous_price, 8),
-        "absolute_change": round(absolute_change, 8),
-        "percentage_change": round(percentage_change, 4),
-    }
-
-
-def parse_symbol_pair(symbol: str) -> Tuple[str, str]:
-    """Parse unified symbol string into base and quote currencies."""
-    clean_symbol = symbol.upper().strip()
-
-    for delimiter in ["/", "-", "_"]:
-        if delimiter in clean_symbol:
-            parts = clean_symbol.split(delimiter)
-            if len(parts) == 2 and parts[0] and parts[1]:
-                return parts[0], parts[1]
-
-    common_quotes = ["USDT", "USDC", "BUSD", "USD", "BTC", "ETH", "EUR"]
-    for quote in common_quotes:
-        if clean_symbol.endswith(quote) and len(clean_symbol) > len(quote):
-            base = clean_symbol[: -len(quote)]
-            return base, quote
-
-    raise ValueError(f"Unable to parse trading pair: {symbol}")
-
-
-def format_crypto_display(
-    amount: float, symbol: str, is_quote: bool = False
-) -> str:
-    """Format crypto amounts with appropriate decimal precision based on value."""
-    if is_quote or amount >= 1000:
-        return f"{amount:,.2f} {symbol}"
-    if amount >= 1:
-        return f"{amount:,.4f} {symbol}"
-    return f"{amount:,.8f} {symbol}"
+def extract_market_data(raw_data: Dict[str, Any]) -> Dict[str, Optional[float]]:
+    """Extracts and normalizes raw cryptocurrency price data from external payloads."""
+    cleaned_data = {}
+    for asset_id, market_info in raw_data.items():
+        price = market_info.get("usd")
+        cleaned_data[asset_id] = float(price) if price is not None else None
+    return cleaned_data

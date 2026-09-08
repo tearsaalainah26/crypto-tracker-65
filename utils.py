@@ -1,40 +1,49 @@
-import time
-import logging
-import functools
-import requests
-
-logger = logging.getLogger(__name__)
-
-def retry_network_op(max_retries: int = 3, backoff_factor: float = 1.0, exceptions=(requests.RequestException,)):
-    """Decorator to retry network operations with exponential backoff."""
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            retries = 0
-            delay = backoff_factor
-            while retries < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as exc:
-                    retries += 1
-                    if retries >= max_retries:
-                        logger.error(f"Failed {func.__name__} after {max_retries} attempts: {exc}")
-                        raise
-                    logger.warning(
-                        f"Network operation {func.__name__} failed ({exc}). Retrying in {delay:.2f}s... ({retries}/{max_retries})"
-                    )
-                    time.sleep(delay)
-                    delay *= 2
-        return wrapper
-    return decorator
+from typing import Dict, Tuple
 
 
-def fetch_crypto_data(url: str, params: dict = None) -> dict:
-    """Fetch cryptocurrency data from an API endpoint with retry handling."""
-    @retry_network_op(max_retries=4, backoff_factor=1.5)
-    def _execute_request():
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        return response.json()
+def calculate_price_metrics(
+    current_price: float, previous_price: float
+) -> Dict[str, float]:
+    """Calculate absolute and percentage change between two price points."""
+    if previous_price <= 0:
+        raise ValueError("Previous price must be greater than zero")
 
-    return _execute_request()
+    absolute_change = current_price - previous_price
+    percentage_change = (absolute_change / previous_price) * 100
+
+    return {
+        "current_price": round(current_price, 8),
+        "previous_price": round(previous_price, 8),
+        "absolute_change": round(absolute_change, 8),
+        "percentage_change": round(percentage_change, 4),
+    }
+
+
+def parse_symbol_pair(symbol: str) -> Tuple[str, str]:
+    """Parse unified symbol string into base and quote currencies."""
+    clean_symbol = symbol.upper().strip()
+
+    for delimiter in ["/", "-", "_"]:
+        if delimiter in clean_symbol:
+            parts = clean_symbol.split(delimiter)
+            if len(parts) == 2 and parts[0] and parts[1]:
+                return parts[0], parts[1]
+
+    common_quotes = ["USDT", "USDC", "BUSD", "USD", "BTC", "ETH", "EUR"]
+    for quote in common_quotes:
+        if clean_symbol.endswith(quote) and len(clean_symbol) > len(quote):
+            base = clean_symbol[: -len(quote)]
+            return base, quote
+
+    raise ValueError(f"Unable to parse trading pair: {symbol}")
+
+
+def format_crypto_display(
+    amount: float, symbol: str, is_quote: bool = False
+) -> str:
+    """Format crypto amounts with appropriate decimal precision based on value."""
+    if is_quote or amount >= 1000:
+        return f"{amount:,.2f} {symbol}"
+    if amount >= 1:
+        return f"{amount:,.4f} {symbol}"
+    return f"{amount:,.8f} {symbol}"

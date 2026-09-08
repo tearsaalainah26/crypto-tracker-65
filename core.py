@@ -1,42 +1,38 @@
-import time
-import logging
-import requests
-from functools import wraps
-from typing import Callable, Any
+import asyncio
+from collections import deque
+from typing import Dict, List, Tuple
 
-logger = logging.getLogger('crypto-tracker-65')
 
-def retry_request(max_retries: int = 3, delay: int = 2):
-    """Decorator to retry network requests on failure."""
-    def decorator(func: Callable):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            last_exception = None
-            for attempt in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except (requests.exceptions.RequestException, ConnectionError) as e:
-                    last_exception = e
-                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
-                    time.sleep(delay)
-            logger.error(f"Failed after {max_retries} attempts: {last_exception}")
-            raise last_exception
-        return wrapper
-    return decorator
+class PerformanceCryptoTracker:
+    """Core tracking engine optimized for fast price updates and moving averages."""
 
-@retry_request(max_retries=3, delay=5)
-def fetch_price(symbol: str) -> float:
-    """Fetch current price for a crypto asset."""
-    url = f"https://api.crypto-tracker.com/v1/ticker/{symbol}"
-    response = requests.get(url, timeout=10)
-    response.raise_for_status()
-    data = response.json()
-    return float(data['price'])
+    def __init__(self, max_history_size: int = 1000):
+        self.max_history_size = max_history_size
+        self._price_queues: Dict[str, deque] = {}
+        self._sums: Dict[str, float] = {}
 
-if __name__ == "__main__":
-    # Example usage for tracker core
-    try:
-        btc_price = fetch_price("BTC")
-        print(f"Current BTC Price: {btc_price}")
-    except Exception as e:
-        print(f"Operation failed: {e}")
+    def update_price(self, symbol: str, price: float) -> float:
+        """Updates symbol price and returns the rolling average in O(1) time."""
+        if symbol not in self._price_queues:
+            self._price_queues[symbol] = deque()
+            self._sums[symbol] = 0.0
+
+        queue = self._price_queues[symbol]
+        self._sums[symbol] += price
+        queue.append(price)
+
+        if len(queue) > self.max_history_size:
+            oldest = queue.popleft()
+            self._sums[symbol] -= oldest
+
+        return self._sums[symbol] / len(queue)
+
+    async def process_price_stream(
+        self, stream: List[Tuple[str, float]]
+    ) -> Dict[str, float]:
+        """Asynchronously processes stream of updates to maximize throughput."""
+        averages = {}
+        for symbol, price in stream:
+            averages[symbol] = self.update_price(symbol, price)
+        await asyncio.sleep(0)
+        return averages

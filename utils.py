@@ -1,29 +1,29 @@
-from typing import Dict, Any, Optional
-from datetime import datetime
+import time
+import functools
+import requests
+from typing import Callable, Any
 
-def format_crypto_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Parses raw API response into standardized application format."""
-    try:
-        return {
-            "symbol": raw_data.get("symbol", "UNKNOWN").upper(),
-            "price_usd": float(raw_data.get("price", 0.0)),
-            "timestamp": datetime.utcnow().isoformat(),
-            "market_cap": float(raw_data.get("market_cap", 0.0)),
-            "is_active": raw_data.get("status") == "active"
-        }
-    except (ValueError, TypeError, AttributeError):
-        return {}
+def retry_network_request(max_retries: int = 3, delay: float = 2.0):
+    """Decorator for retrying network operations on failure."""
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except (requests.exceptions.RequestException, ConnectionError) as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        time.sleep(delay * (2 ** attempt))
+            raise last_exception
+        return wrapper
+    return decorator
 
-def calculate_portfolio_value(holdings: Dict[str, float], prices: Dict[str, float]) -> float:
-    """Calculates total value based on asset holdings and current prices."""
-    total = 0.0
-    for asset, quantity in holdings.items():
-        price = prices.get(asset, 0.0)
-        total += quantity * price
-    return round(total, 2)
-
-def validate_ticker(ticker: str) -> bool:
-    """Checks if the provided ticker string matches standard crypto formats."""
-    if not isinstance(ticker, str):
-        return False
-    return 2 <= len(ticker) <= 10 and ticker.isalnum()
+@retry_network_request(max_retries=3, delay=1.0)
+def fetch_crypto_price(ticker: str) -> float:
+    """Example function for fetching crypto data from an endpoint."""
+    url = f"https://api.crypto-tracker-65.com/price/{ticker}"
+    response = requests.get(url, timeout=5)
+    response.raise_for_status()
+    return float(response.json().get("price", 0.0))

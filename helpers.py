@@ -1,32 +1,30 @@
-import logging
-from decimal import Decimal, InvalidOperation
+import math
+from typing import Union
 
-logger = logging.getLogger("crypto-tracker-65")
 
-def format_currency(amount: float, currency_symbol: str = "$") -> str:
-    """Format a numeric amount into a standard currency string."""
-    try:
-        dec_amount = Decimal(str(amount))
-        return f"{currency_symbol}{dec_amount:,.2f}"
-    except (InvalidOperation, TypeError) as e:
-        logger.error(f"Failed to format currency for value {amount}: {e}")
-        return f"{currency_symbol}0.00"
+def format_currency(value: Union[int, float], symbol: str = "$") -> str:
+    """Formats a numeric value as a currency string with appropriate decimals."""
+    if value is None:
+        return f"{symbol}0.00"
+    if abs(value) >= 1.0:
+        return f"{symbol}{value:,.2f}"
+    if value == 0:
+        return f"{symbol}0.00"
+    # For small crypto prices, show up to 8 decimal places
+    decimals = max(2, min(8, -int(math.floor(math.log10(abs(value)))) + 1))
+    return f"{symbol}{value:,.{decimals}f}"
 
-def calculate_percentage_change(old_value: float, new_value: float) -> float:
-    """Calculate the percentage change between two price points."""
-    if old_value == 0:
+
+def calculate_percentage_change(old_price: float, new_price: float) -> float:
+    """Calculates the percentage change between two prices."""
+    if not old_price:
         return 0.0
-    try:
-        old_dec = Decimal(str(old_value))
-        new_dec = Decimal(str(new_value))
-        change = ((new_dec - old_dec) / old_dec) * Decimal("100")
-        return float(change.quantize(Decimal("0.01")))
-    except (InvalidOperation, TypeError) as e:
-        logger.error(f"Failed to calculate percentage change: {e}")
-        return 0.0
+    return ((new_price - old_price) / old_price) * 100.0
 
-def sanitize_symbol(symbol: str) -> str:
-    """Clean and normalize a cryptocurrency trading symbol."""
-    if not isinstance(symbol, str):
-        return ""
-    return symbol.strip().upper()
+
+def validate_ticker(ticker: str) -> bool:
+    """Validates if a ticker symbol is in a correct format."""
+    if not ticker or not isinstance(ticker, str):
+        return False
+    clean_ticker = ticker.strip().upper()
+    return clean_ticker.isalnum() and 2 <= len(clean_ticker) <= 10

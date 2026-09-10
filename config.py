@@ -1,59 +1,41 @@
 import os
-import json
-from typing import Any, Dict, List
+import logging
+from typing import Any, Dict
 
-DEFAULT_CONFIG = {
-    "API_KEY": "",
-    "BASE_CURRENCY": "USD",
-    "UPDATE_INTERVAL_SECONDS": "60",
-    "LOG_LEVEL": "INFO",
-    "TRACKED_COINS": "bitcoin,ethereum,solana",
-    "COINGECKO_API_URL": "https://api.coingecko.com/api/v3"
-}
+# crypto-tracker-65 global configuration
 
-class ConfigLoader:
-    def __init__(self, config_file_path: str = "config.json"):
-        self.config_file_path = config_file_path
-        self.settings: Dict[str, Any] = {}
-        self.load_configuration()
+def get_env_variable(key: str, default: Any = None) -> Any:
+    """Retrieves environment variable with validation."""
+    try:
+        value = os.getenv(key)
+        if value is None:
+            if default is not None:
+                return default
+            raise ValueError(f"Missing required environment variable: {key}")
+        return value
+    except Exception as e:
+        logging.error(f"Config retrieval error for {key}: {e}")
+        raise
 
-    def load_configuration(self) -> None:
-        # Initialize settings with hardcoded defaults
-        self.settings = DEFAULT_CONFIG.copy()
-
-        # Override with JSON config file if present and valid
-        if os.path.exists(self.config_file_path):
-            try:
-                with open(self.config_file_path, "r", encoding="utf-8") as f:
-                    file_data = json.load(f)
-                    if isinstance(file_data, dict):
-                        for key, value in file_data.items():
-                            self.settings[key.upper()] = str(value)
-            except (json.JSONDecodeError, IOError):
-                # Fallback to defaults if configuration file is corrupted
-                pass
-
-        # Override with environment variables prefixed with CRYPTO_
-        for key in DEFAULT_CONFIG:
-            env_value = os.environ.get(f"CRYPTO_{key}")
-            if env_value is not None:
-                self.settings[key] = env_value
-
-    def get_api_key(self) -> str:
-        return self.settings.get("API_KEY", "")
-
-    def get_base_currency(self) -> str:
-        return self.settings.get("BASE_CURRENCY", "USD").upper()
-
-    def get_update_interval(self) -> int:
+class Config:
+    def __init__(self):
         try:
-            return int(self.settings.get("UPDATE_INTERVAL_SECONDS", 60))
-        except ValueError:
-            return 60
+            self.API_KEY = get_env_variable("CRYPTO_API_KEY")
+            self.POLLING_INTERVAL = int(get_env_variable("POLLING_INTERVAL", 60))
+            self.TIMEOUT = float(get_env_variable("REQUEST_TIMEOUT", 5.0))
+        except (ValueError, TypeError) as e:
+            logging.critical(f"Invalid configuration types: {e}")
+            raise
 
-    def get_tracked_coins(self) -> List[str]:
-        coins_raw = self.settings.get("TRACKED_COINS", "")
-        return [coin.strip().lower() for coin in coins_raw.split(",") if coin.strip()]
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "api_key_set": bool(self.API_KEY),
+            "interval": self.POLLING_INTERVAL,
+            "timeout": self.TIMEOUT
+        }
 
-    def get_api_url(self) -> str:
-        return self.settings.get("COINGECKO_API_URL", "https://api.coingecko.com/api/v3")
+# Singleton configuration instance
+try:
+    settings = Config()
+except Exception:
+    settings = None

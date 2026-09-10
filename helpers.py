@@ -1,30 +1,29 @@
-import math
-from typing import Union
+import logging
+import requests
+from typing import Optional, Any
 
+logger = logging.getLogger(__name__)
 
-def format_currency(value: Union[int, float], symbol: str = "$") -> str:
-    """Formats a numeric value as a currency string with appropriate decimals."""
-    if value is None:
-        return f"{symbol}0.00"
-    if abs(value) >= 1.0:
-        return f"{symbol}{value:,.2f}"
-    if value == 0:
-        return f"{symbol}0.00"
-    # For small crypto prices, show up to 8 decimal places
-    decimals = max(2, min(8, -int(math.floor(math.log10(abs(value)))) + 1))
-    return f"{symbol}{value:,.{decimals}f}"
+def fetch_price_data(url: str, timeout: int = 10) -> Optional[dict]:
+    """Fetches crypto price data with defensive error handling."""
+    try:
+        response = requests.get(url, timeout=timeout)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.Timeout:
+        logger.error(f"Request to {url} timed out")
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"HTTP error occurred: {e}")
+    except requests.exceptions.ConnectionError:
+        logger.error(f"Failed to connect to {url}")
+    except ValueError:
+        logger.error(f"Failed to decode JSON response from {url}")
+    except Exception as e:
+        logger.error(f"Unexpected error during fetch: {e}")
+    return None
 
-
-def calculate_percentage_change(old_price: float, new_price: float) -> float:
-    """Calculates the percentage change between two prices."""
-    if not old_price:
-        return 0.0
-    return ((new_price - old_price) / old_price) * 100.0
-
-
-def validate_ticker(ticker: str) -> bool:
-    """Validates if a ticker symbol is in a correct format."""
-    if not ticker or not isinstance(ticker, str):
-        return False
-    clean_ticker = ticker.strip().upper()
-    return clean_ticker.isalnum() and 2 <= len(clean_ticker) <= 10
+def validate_ticker(ticker: Any) -> str:
+    """Ensures ticker format is valid string."""
+    if not isinstance(ticker, str) or not ticker.isalnum():
+        raise ValueError(f"Invalid ticker format: {ticker}")
+    return ticker.upper()

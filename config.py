@@ -1,41 +1,66 @@
+import json
 import os
-import logging
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-# crypto-tracker-65 global configuration
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "primary_currency": "usd",
+    "update_interval_seconds": 30,
+    "api_endpoints": {
+        "coingecko": "https://api.coingecko.com/api/v3",
+        "binance": "https://api.binance.com/api/v3",
+    },
+    "tracked_assets": ["bitcoin", "ethereum", "solana"],
+    "request_timeout_seconds": 10,
+    "max_retries": 3,
+    "enable_cache": True,
+}
 
-def get_env_variable(key: str, default: Any = None) -> Any:
-    """Retrieves environment variable with validation."""
-    try:
-        value = os.getenv(key)
-        if value is None:
-            if default is not None:
-                return default
-            raise ValueError(f"Missing required environment variable: {key}")
-        return value
-    except Exception as e:
-        logging.error(f"Config retrieval error for {key}: {e}")
-        raise
 
-class Config:
-    def __init__(self):
-        try:
-            self.API_KEY = get_env_variable("CRYPTO_API_KEY")
-            self.POLLING_INTERVAL = int(get_env_variable("POLLING_INTERVAL", 60))
-            self.TIMEOUT = float(get_env_variable("REQUEST_TIMEOUT", 5.0))
-        except (ValueError, TypeError) as e:
-            logging.critical(f"Invalid configuration types: {e}")
-            raise
+class ConfigLoader:
+    """Loads configuration from environment variables and JSON files with fallback defaults."""
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "api_key_set": bool(self.API_KEY),
-            "interval": self.POLLING_INTERVAL,
-            "timeout": self.TIMEOUT
-        }
+    def __init__(self, config_path: Optional[str] = None) -> None:
+        self.config_path = Path(config_path) if config_path else None
+        self._config: Dict[str, Any] = DEFAULT_CONFIG.copy()
 
-# Singleton configuration instance
-try:
-    settings = Config()
-except Exception:
-    settings = None
+    def load(self) -> Dict[str, Any]:
+        """Load configuration hierarchy: defaults -> file -> environment variables."""
+        if self.config_path and self.config_path.is_file():
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as file:
+                    file_config = json.load(file)
+                    self._merge_dicts(self._config, file_config)
+            except (json.JSONDecodeError, OSError) as err:
+                print(f"Warning: Failed to load config file: {err}")
+
+        self._apply_env_overrides()
+        return self._config
+
+    def _merge_dicts(self, target: Dict[str, Any], source: Dict[str, Any]) -> None:
+        """Recursively update target dictionary with source dictionary values."""
+        for key, value in source.items():
+            if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+                self._merge_dicts(target[key], value)
+            else:
+                target[key] = value
+
+    def _apply_env_overrides(self) -> None:
+        """Override configuration parameters using CRYPTO_TRACKER_* environment variables."""
+        currency = os.getenv("CRYPTO_TRACKER_CURRENCY")
+        if currency:
+            self._config["primary_currency"] = currency.lower()
+
+        interval = os.getenv("CRYPTO_TRACKER_INTERVAL")
+        if interval and interval.isdigit():
+            self._config["update_interval_seconds"] = int(interval)
+
+        timeout = os.getenv("CRYPTO_TRACKER_TIMEOUT")
+        if timeout and timeout.isdigit():
+            self._config["request_timeout_seconds"] = int(timeout)
+
+
+def get_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+    """Convenience function to load and return global tracking configuration."""
+    loader = ConfigLoader(config_path)
+    return loader.load()

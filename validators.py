@@ -1,28 +1,31 @@
-import re
+import logging
 
-# Allowed cryptocurrency symbols for validation
-VALID_SYMBOLS = {'BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'XRP'}
+logger = logging.getLogger(__name__)
 
-def validate_ticker(symbol: str) -> bool:
-    """Ensures symbol is uppercase and in supported list."""
-    if not isinstance(symbol, str):
+def validate_ticker(ticker: str) -> bool:
+    """Ensures the crypto ticker is alphanumeric and within reasonable length."""
+    if not isinstance(ticker, str):
         return False
-    return symbol.upper() in VALID_SYMBOLS
+    if not (1 <= len(ticker) <= 10):
+        return False
+    return ticker.isalnum()
 
 def validate_amount(amount: float) -> bool:
-    """Checks for non-negative numerical input."""
+    """Checks if the trade amount is a positive numerical value."""
     try:
         val = float(amount)
         return val > 0
     except (ValueError, TypeError):
         return False
 
-def validate_api_key(key: str) -> bool:
-    """Basic format validation for crypto exchange keys."""
-    # Matches alphanumeric keys of length 32-64
-    pattern = r'^[a-zA-Z0-9]{32,64}$'
-    return bool(re.match(pattern, key))
-
-def sanitize_input(user_input: str) -> str:
-    """Removes whitespace and forces casing for uniformity."""
-    return str(user_input).strip().upper()
+def process_input(ticker: str, amount: float) -> dict:
+    """Orchestrates validation for incoming data points."""
+    if not validate_ticker(ticker):
+        logger.error(f"Invalid ticker format: {ticker}")
+        return {"status": "error", "message": "invalid ticker"}
+    
+    if not validate_amount(amount):
+        logger.error(f"Invalid amount provided: {amount}")
+        return {"status": "error", "message": "invalid amount"}
+        
+    return {"status": "success", "data": {"ticker": ticker.upper(), "amount": float(amount)}}

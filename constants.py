@@ -1,28 +1,32 @@
-import enum
 from typing import Final
 
-# caching constants for ticker operations
-CACHE_TTL: Final[int] = 300
+# Crypto asset configuration
+SUPPORTED_ASSETS: Final[list[str]] = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT']
+
+# Network and API constants
+DEFAULT_TIMEOUT: Final[int] = 10
+API_BASE_URL: Final[str] = 'https://api.crypto-tracker-65.com/v1'
 MAX_RETRIES: Final[int] = 3
-REQUEST_TIMEOUT: Final[float] = 10.0
 
-# supported trading pairs
-SUPPORTED_PAIRS: Final[list[str]] = [
-    "BTC-USD",
-    "ETH-USD",
-    "SOL-USD",
-    "ADA-USD"
-]
+# Formatting constants
+CURRENCY_SYMBOL: Final[str] = '$'
+DECIMAL_PRECISION: Final[int] = 8
 
-class ExchangeStatus(enum.IntEnum):
-    OPERATIONAL = 1
-    MAINTENANCE = 2
-    DISCONNECTED = 3
+# Application settings
+POLLING_INTERVAL_SECONDS: Final[int] = 60
+DEFAULT_DB_PATH: Final[str] = 'crypto_data.db'
 
-# connection pool limits for performance
-MAX_CONCURRENT_REQUESTS: Final[int] = 10
-API_RATE_LIMIT_DELAY: Final[float] = 0.5
+def get_asset_limit(asset: str) -> float:
+    """Return maximum order limit for a specific asset."""
+    limits = {
+        'BTC': 1.0,
+        'ETH': 10.0,
+        'SOL': 100.0,
+        'ADA': 10000.0,
+        'DOT': 500.0
+    }
+    return limits.get(asset, 0.0)
 
-def get_cache_key(pair: str) -> str:
-    """generate standardized cache key"""
-    return f"ticker:{pair.lower()}"
+def format_price(value: float) -> str:
+    """Format currency values consistently across the app."""
+    return f"{CURRENCY_SYMBOL}{value:.2f}"

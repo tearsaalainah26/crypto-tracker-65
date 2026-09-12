@@ -1,66 +1,49 @@
-import json
 import os
-from pathlib import Path
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
+from typing import List, Dict, Any
 
-DEFAULT_CONFIG: Dict[str, Any] = {
-    "primary_currency": "usd",
-    "update_interval_seconds": 30,
-    "api_endpoints": {
-        "coingecko": "https://api.coingecko.com/api/v3",
-        "binance": "https://api.binance.com/api/v3",
-    },
-    "tracked_assets": ["bitcoin", "ethereum", "solana"],
-    "request_timeout_seconds": 10,
-    "max_retries": 3,
-    "enable_cache": True,
-}
+@dataclass(frozen=True)
+class TrackerConfig:
+    api_key: str
+    base_url: str
+    tracked_coins: List[str] = field(default_factory=lambda: ["bitcoin", "ethereum", "solana"])
+    update_interval: int = 60  # in seconds
+    fiat_currency: str = "usd"
 
+    @classmethod
+    def from_env(cls) -> "TrackerConfig":
+        """Loads tracker configuration from environment variables with safe fallbacks."""
+        api_key = os.getenv("CRYPTO_TRACKER_API_KEY", "demo_key_12345")
+        base_url = os.getenv("CRYPTO_TRACKER_BASE_URL", "https://api.coingecko.com/v3")
+        
+        coins_raw = os.getenv("CRYPTO_TRACKER_COINS")
+        if coins_raw:
+            coins = [coin.strip().lower() for coin in coins_raw.split(",") if coin.strip()]
+        else:
+            coins = ["bitcoin", "ethereum", "solana"]
 
-class ConfigLoader:
-    """Loads configuration from environment variables and JSON files with fallback defaults."""
+        try:
+            interval = int(os.getenv("CRYPTO_TRACKER_INTERVAL", "60"))
+        except ValueError:
+            interval = 60
 
-    def __init__(self, config_path: Optional[str] = None) -> None:
-        self.config_path = Path(config_path) if config_path else None
-        self._config: Dict[str, Any] = DEFAULT_CONFIG.copy()
+        fiat = os.getenv("CRYPTO_TRACKER_FIAT", "usd").strip().lower()
 
-    def load(self) -> Dict[str, Any]:
-        """Load configuration hierarchy: defaults -> file -> environment variables."""
-        if self.config_path and self.config_path.is_file():
-            try:
-                with open(self.config_path, "r", encoding="utf-8") as file:
-                    file_config = json.load(file)
-                    self._merge_dicts(self._config, file_config)
-            except (json.JSONDecodeError, OSError) as err:
-                print(f"Warning: Failed to load config file: {err}")
+        return cls(
+            api_key=api_key,
+            base_url=base_url,
+            tracked_coins=coins,
+            update_interval=interval,
+            fiat_currency=fiat
+        )
 
-        self._apply_env_overrides()
-        return self._config
-
-    def _merge_dicts(self, target: Dict[str, Any], source: Dict[str, Any]) -> None:
-        """Recursively update target dictionary with source dictionary values."""
-        for key, value in source.items():
-            if isinstance(value, dict) and key in target and isinstance(target[key], dict):
-                self._merge_dicts(target[key], value)
-            else:
-                target[key] = value
-
-    def _apply_env_overrides(self) -> None:
-        """Override configuration parameters using CRYPTO_TRACKER_* environment variables."""
-        currency = os.getenv("CRYPTO_TRACKER_CURRENCY")
-        if currency:
-            self._config["primary_currency"] = currency.lower()
-
-        interval = os.getenv("CRYPTO_TRACKER_INTERVAL")
-        if interval and interval.isdigit():
-            self._config["update_interval_seconds"] = int(interval)
-
-        timeout = os.getenv("CRYPTO_TRACKER_TIMEOUT")
-        if timeout and timeout.isdigit():
-            self._config["request_timeout_seconds"] = int(timeout)
-
-
-def get_config(config_path: Optional[str] = None) -> Dict[str, Any]:
-    """Convenience function to load and return global tracking configuration."""
-    loader = ConfigLoader(config_path)
-    return loader.load()
+    def to_dict(self) -> Dict[str, Any]:
+        """Returns configuration settings with a masked API key for safe logging."""
+        masked_key = f"{self.api_key[:4]}...{self.api_key[-4:]}" if len(self.api_key) > 8 else "***"
+        return {
+            "base_url": self.base_url,
+            "tracked_coins": self.tracked_coins,
+            "update_interval": self.update_interval,
+            "fiat_currency": self.fiat_currency,
+            "api_key_masked": masked_key
+        }

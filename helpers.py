@@ -1,31 +1,38 @@
 import time
-import functools
 import logging
-from typing import Callable, Any
+from typing import Dict, Any, Optional
 
-logger = logging.getLogger('crypto-tracker-65')
+logger = logging.getLogger(__name__)
 
-def retry_network_call(max_retries: int = 3, delay: float = 1.0):
-    """
-    Decorator to retry network operations on failure.
-    Retries up to max_retries with an exponential backoff.
-    """
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            last_exception = None
-            current_delay = delay
-            
-            for attempt in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError, Exception) as e:
-                    last_exception = e
-                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {current_delay}s...")
-                    time.sleep(current_delay)
-                    current_delay *= 2
-            
-            logger.error(f"Final attempt failed after {max_retries} retries.")
-            raise last_exception
-        return wrapper
-    return decorator
+def format_price(amount: float, currency: str = "USD") -> str:
+    """Formats crypto price for standardized display."""
+    return f"{amount:,.2f} {currency}"
+
+def sanitize_ticker(ticker: str) -> str:
+    """Ensures ticker format consistency."""
+    return ticker.strip().upper()
+
+def retry_request(func, retries: int = 3, delay: int = 2):
+    """Decorator logic for unstable network requests."""
+    def wrapper(*args, **kwargs):
+        last_error = None
+        for attempt in range(retries):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                last_error = e
+                time.sleep(delay)
+        logger.error(f"Failed after {retries} attempts: {last_error}")
+        return None
+    return wrapper
+
+def parse_crypto_data(data: Dict[str, Any]) -> Optional[Dict[str, float]]:
+    """Extracts essential market fields from API response."""
+    try:
+        return {
+            "price": float(data.get("price", 0)),
+            "volume": float(data.get("volume_24h", 0)),
+            "timestamp": time.time()
+        }
+    except (ValueError, TypeError):
+        return None

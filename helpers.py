@@ -1,29 +1,31 @@
+import time
+import functools
 import logging
-import requests
-from typing import Optional, Any
+from typing import Callable, Any
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('crypto-tracker-65')
 
-def fetch_price_data(url: str, timeout: int = 10) -> Optional[dict]:
-    """Fetches crypto price data with defensive error handling."""
-    try:
-        response = requests.get(url, timeout=timeout)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.Timeout:
-        logger.error(f"Request to {url} timed out")
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"HTTP error occurred: {e}")
-    except requests.exceptions.ConnectionError:
-        logger.error(f"Failed to connect to {url}")
-    except ValueError:
-        logger.error(f"Failed to decode JSON response from {url}")
-    except Exception as e:
-        logger.error(f"Unexpected error during fetch: {e}")
-    return None
-
-def validate_ticker(ticker: Any) -> str:
-    """Ensures ticker format is valid string."""
-    if not isinstance(ticker, str) or not ticker.isalnum():
-        raise ValueError(f"Invalid ticker format: {ticker}")
-    return ticker.upper()
+def retry_network_call(max_retries: int = 3, delay: float = 1.0):
+    """
+    Decorator to retry network operations on failure.
+    Retries up to max_retries with an exponential backoff.
+    """
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            last_exception = None
+            current_delay = delay
+            
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError, Exception) as e:
+                    last_exception = e
+                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {current_delay}s...")
+                    time.sleep(current_delay)
+                    current_delay *= 2
+            
+            logger.error(f"Final attempt failed after {max_retries} retries.")
+            raise last_exception
+        return wrapper
+    return decorator

@@ -1,38 +1,41 @@
-import time
-import logging
-from typing import Dict, Any, Optional
+from typing import Dict, List, Optional, Union
 
-logger = logging.getLogger(__name__)
+def format_price(amount: float, symbol: str = 'USD') -> str:
+    """
+    Format crypto price as a currency string.
 
-def format_price(amount: float, currency: str = "USD") -> str:
-    """Formats crypto price for standardized display."""
-    return f"{amount:,.2f} {currency}"
+    :param amount: The numeric value of the asset.
+    :param symbol: Currency code (default USD).
+    :return: String representation with currency symbol.
+    """
+    return f"{symbol} {amount:,.2f}"
 
-def sanitize_ticker(ticker: str) -> str:
-    """Ensures ticker format consistency."""
-    return ticker.strip().upper()
+def calculate_portfolio_value(holdings: List[Dict[str, float]]) -> float:
+    """
+    Calculate total value of a list of assets.
 
-def retry_request(func, retries: int = 3, delay: int = 2):
-    """Decorator logic for unstable network requests."""
-    def wrapper(*args, **kwargs):
-        last_error = None
-        for attempt in range(retries):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                last_error = e
-                time.sleep(delay)
-        logger.error(f"Failed after {retries} attempts: {last_error}")
+    :param holdings: List of dicts containing 'quantity' and 'price'.
+    :return: Total portfolio valuation as float.
+    """
+    return sum(item.get('quantity', 0.0) * item.get('price', 0.0) for item in holdings)
+
+def get_asset_change_percentage(current: float, previous: float) -> Optional[float]:
+    """
+    Calculate percentage change between two price points.
+
+    :param current: Current market price.
+    :param previous: Historical price for comparison.
+    :return: Percentage change or None if previous is zero.
+    """
+    if previous == 0:
         return None
-    return wrapper
+    return ((current - previous) / previous) * 100
 
-def parse_crypto_data(data: Dict[str, Any]) -> Optional[Dict[str, float]]:
-    """Extracts essential market fields from API response."""
-    try:
-        return {
-            "price": float(data.get("price", 0)),
-            "volume": float(data.get("volume_24h", 0)),
-            "timestamp": time.time()
-        }
-    except (ValueError, TypeError):
-        return None
+def validate_ticker(ticker: str) -> bool:
+    """
+    Check if the ticker string matches standard crypto naming.
+
+    :param ticker: The crypto symbol string.
+    :return: Boolean indicating valid formatting.
+    """
+    return isinstance(ticker, str) and ticker.isalnum() and len(ticker) <= 10

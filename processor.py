@@ -1,39 +1,57 @@
 import logging
-from typing import Optional, Dict, Any
+import re
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
-def process_crypto_data(data: Optional[Dict[str, Any]]) -> Optional[float]:
-    """Extracts price from raw payload with safety checks."""
-    if not data:
-        logger.error("Empty payload received for processing")
-        return None
+ALLOWED_TIMEFRAMES = {"1m", "5m", "15m", "1h", "4h", "1d"}
+SYMBOL_PATTERN = re.compile(r"^[A-Z0-9]{2,10}-[A-Z0-9]{2,10}$")
 
-    try:
-        ticker = data.get('ticker')
-        price = data.get('price')
 
-        if ticker is None or price is None:
-            raise ValueError(f"Missing required fields in payload: {data.keys()}")
+def validate_crypto_input(payload: Dict[str, Any]) -> bool:
+    """Validate incoming crypto tracking payload structure and values."""
+    symbol = payload.get("symbol")
+    if not symbol or not isinstance(symbol, str) or not SYMBOL_PATTERN.match(symbol):
+        logger.warning(f"Invalid symbol format: {symbol}")
+        return False
 
-        processed_price = float(price)
-        if processed_price < 0:
-            raise ValueError(f"Negative price detected: {processed_price}")
+    price = payload.get("price")
+    if not isinstance(price, (int, float)) or price <= 0:
+        logger.warning(f"Invalid price for {symbol}: {price}")
+        return False
 
-        return processed_price
+    volume = payload.get("volume")
+    if not isinstance(volume, (int, float)) or volume < 0:
+        logger.warning(f"Invalid volume for {symbol}: {volume}")
+        return False
 
-    except (ValueError, TypeError) as e:
-        logger.warning(f"Data validation failure: {e}")
-        return None
-    except Exception as e:
-        logger.critical(f"Unexpected error during crypto processing: {e}")
-        return None
+    timeframe = payload.get("timeframe", "1m")
+    if timeframe not in ALLOWED_TIMEFRAMES:
+        logger.warning(f"Unsupported timeframe for {symbol}: {timeframe}")
+        return False
 
-def batch_process(items: list) -> list:
-    """Process list of items with individual error handling."""
-    results = []
-    for item in items:
-        result = process_crypto_data(item)
-        if result is not None:
-            results.append(result)
-    return results
+    return True
+
+
+def process_market_updates(raw_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Main processing loop that validates and transforms raw market data events."""
+    processed_data = []
+
+    for index, event in enumerate(raw_events):
+        if not isinstance(event, dict):
+            logger.error(f"Skipping non-dict payload at index {index}")
+            continue
+
+        if not validate_crypto_input(event):
+            logger.error(f"Validation failed for update at index {index}")
+            continue
+
+        sanitized_record = {
+            "symbol": event["symbol"].upper(),
+            "price": float(event["price"]),
+            "volume": float(event["volume"]),
+            "timeframe": event.get("timeframe", "1m"),
+        }
+        processed_data.append(sanitized_record)
+
+    return processed_data

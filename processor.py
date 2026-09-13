@@ -1,39 +1,39 @@
-import functools
-from typing import Dict, List
+import logging
+from typing import Optional, Dict, Any
 
-# Cache for crypto price calculations to reduce CPU overhead
-@functools.lru_cache(maxsize=128)
-def calculate_portfolio_value(prices: Dict[str, float], holdings: Dict[str, float]) -> float:
-    """Calculates total value using cached lookups for performance."""
-    total = 0.0
-    for coin, amount in holdings.items():
-        price = prices.get(coin, 0.0)
-        total += price * amount
-    return total
+logger = logging.getLogger(__name__)
 
-class DataProcessor:
-    """High-performance data processing for crypto-tracker-65."""
-    def __init__(self, batch_size: int = 100):
-        self.batch_size = batch_size
+def process_crypto_data(data: Optional[Dict[str, Any]]) -> Optional[float]:
+    """Extracts price from raw payload with safety checks."""
+    if not data:
+        logger.error("Empty payload received for processing")
+        return None
 
-    def process_market_data(self, data: List[Dict]) -> List[Dict]:
-        """Efficient batch processing of raw market ticks."""
-        if not data:
-            return []
-        
-        # Use list comprehension for faster iteration
-        return [
-            {
-                'symbol': item.get('s'),
-                'price': float(item.get('p', 0)),
-                'volume': float(item.get('v', 0))
-            }
-            for item in data
-        ]
+    try:
+        ticker = data.get('ticker')
+        price = data.get('price')
 
-    def get_summary(self, prices: Dict, holdings: Dict) -> Dict:
-        """Provides optimized calculation interface."""
-        return {
-            'total_value': calculate_portfolio_value(tuple(sorted(prices.items())), tuple(sorted(holdings.items()))),
-            'asset_count': len(holdings)
-        }
+        if ticker is None or price is None:
+            raise ValueError(f"Missing required fields in payload: {data.keys()}")
+
+        processed_price = float(price)
+        if processed_price < 0:
+            raise ValueError(f"Negative price detected: {processed_price}")
+
+        return processed_price
+
+    except (ValueError, TypeError) as e:
+        logger.warning(f"Data validation failure: {e}")
+        return None
+    except Exception as e:
+        logger.critical(f"Unexpected error during crypto processing: {e}")
+        return None
+
+def batch_process(items: list) -> list:
+    """Process list of items with individual error handling."""
+    results = []
+    for item in items:
+        result = process_crypto_data(item)
+        if result is not None:
+            results.append(result)
+    return results

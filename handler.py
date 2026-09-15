@@ -1,38 +1,58 @@
+import json
 import logging
+from typing import Dict, Any
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("crypto_tracker.handler")
 
-def validate_ticker(ticker):
-    """Checks if ticker format is valid."""
-    if not isinstance(ticker, str) or len(ticker) < 2 or len(ticker) > 10:
-        return False
-    return ticker.isalnum()
+class MarketDataParseError(Exception):
+    """Custom exception for market data parsing failures."""
+    pass
 
-def process_crypto_updates(data_stream):
-    """
-    Main processing loop for incoming crypto price feeds.
-    Validates input before proceeding to business logic.
-    """
-    for entry in data_stream:
+class CryptoAPIHandler:
+    """Handles parsing and validation of cryptocurrency API payloads."""
+
+    @staticmethod
+    def parse_ticker_data(raw_response: str) -> Dict[str, Any]:
+        """
+        Parses and validates raw ticker JSON response from a crypto API.
+        
+        Handles edge cases such as invalid JSON, missing keys, type mismatches,
+        and unexpected price anomalies like negative or zero values.
+        """
+        if not raw_response or not raw_response.strip():
+            raise MarketDataParseError("Received empty payload from API")
+
         try:
-            ticker = entry.get("ticker")
-            price = entry.get("price")
+            data = json.loads(raw_response)
+        except json.JSONDecodeError as err:
+            raise MarketDataParseError(f"Malformed JSON response: {err}")
 
-            # Input validation checks
-            if not validate_ticker(ticker):
-                logger.warning(f"Invalid ticker format: {ticker}")
-                continue
+        if not isinstance(data, dict):
+            raise MarketDataParseError("Invalid API response format: expected a dictionary")
 
-            if not isinstance(price, (int, float)) or price < 0:
-                logger.warning(f"Invalid price value: {price} for {ticker}")
-                continue
+        required_keys = ["symbol", "price", "volume_24h"]
+        for key in required_keys:
+            if key not in data:
+                raise MarketDataParseError(f"Missing required key in response: {key}")
 
-            # Process valid ticker and price
-            logger.info(f"Updating {ticker} to {price}")
-            
-        except Exception as e:
-            logger.error(f"Unexpected error during processing: {e}")
+        symbol = str(data["symbol"]).upper().strip()
+        if not symbol:
+            raise MarketDataParseError("Symbol field cannot be empty")
 
-if __name__ == "__main__":
-    sample_data = [{"ticker": "BTC", "price": 50000}, {"ticker": "!INVALID", "price": 10}]
-    process_crypto_updates(sample_data)
+        try:
+            price = float(data["price"])
+            volume = float(data["volume_24h"])
+        except (ValueError, TypeError) as err:
+            raise MarketDataParseError(f"Numeric validation error for price or volume: {err}")
+
+        if price <= 0:
+            raise MarketDataParseError(f"Invalid non-positive price encountered: {price}")
+        if volume < 0:
+            raise MarketDataParseError(f"Invalid negative volume encountered: {volume}")
+
+        return {
+            "symbol": symbol,
+            "price": price,
+            "volume_24h": volume,
+            "change_24h": float(data.get("change_24h", 0.0))
+        }

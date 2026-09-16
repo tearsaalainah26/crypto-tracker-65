@@ -1,31 +1,42 @@
-import logging
+import re
+from typing import Dict, Any, Union
 
-logger = logging.getLogger(__name__)
+# Regex for standard crypto ticker symbols (2 to 10 alphanumeric characters)
+SYMBOL_PATTERN = re.compile(r"^[A-Z0-9]{2,10}$")
 
-def validate_ticker(ticker: str) -> bool:
-    """Ensures the crypto ticker is alphanumeric and within reasonable length."""
-    if not isinstance(ticker, str):
+def validate_ticker(symbol: str) -> bool:
+    """Validates if the ticker symbol conforms to standard crypto formats."""
+    if not isinstance(symbol, str):
         return False
-    if not (1 <= len(ticker) <= 10):
-        return False
-    return ticker.isalnum()
+    return bool(SYMBOL_PATTERN.match(symbol.upper()))
 
-def validate_amount(amount: float) -> bool:
-    """Checks if the trade amount is a positive numerical value."""
+def validate_price(price: Union[int, float]) -> bool:
+    """Ensures the cryptocurrency price is a positive float or int."""
+    if not isinstance(price, (int, float)):
+        return False
+    return price > 0.0
+
+def validate_transaction_payload(payload: Dict[str, Any]) -> bool:
+    """
+    Validates incoming transaction payloads before processing.
+    Expected structure containing symbol, amount, and price.
+    """
+    if not isinstance(payload, dict):
+        return False
+
+    required_keys = {"symbol", "amount", "price"}
+    if not required_keys.issubset(payload.keys()):
+        return False
+
+    if not validate_ticker(payload["symbol"]):
+        return False
+
     try:
-        val = float(amount)
-        return val > 0
+        amount = float(payload["amount"])
+        price = float(payload["price"])
+        if amount <= 0 or price <= 0:
+            return False
     except (ValueError, TypeError):
         return False
 
-def process_input(ticker: str, amount: float) -> dict:
-    """Orchestrates validation for incoming data points."""
-    if not validate_ticker(ticker):
-        logger.error(f"Invalid ticker format: {ticker}")
-        return {"status": "error", "message": "invalid ticker"}
-    
-    if not validate_amount(amount):
-        logger.error(f"Invalid amount provided: {amount}")
-        return {"status": "error", "message": "invalid amount"}
-        
-    return {"status": "success", "data": {"ticker": ticker.upper(), "amount": float(amount)}}
+    return True

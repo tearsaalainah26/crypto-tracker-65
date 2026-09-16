@@ -1,58 +1,30 @@
-import json
-import logging
-from typing import Dict, Any
+import decimal
+from typing import Dict, Any, Optional
 
-logger = logging.getLogger("crypto_tracker.handler")
-
-class MarketDataParseError(Exception):
-    """Custom exception for market data parsing failures."""
-    pass
-
-class CryptoAPIHandler:
-    """Handles parsing and validation of cryptocurrency API payloads."""
-
-    @staticmethod
-    def parse_ticker_data(raw_response: str) -> Dict[str, Any]:
-        """
-        Parses and validates raw ticker JSON response from a crypto API.
-        
-        Handles edge cases such as invalid JSON, missing keys, type mismatches,
-        and unexpected price anomalies like negative or zero values.
-        """
-        if not raw_response or not raw_response.strip():
-            raise MarketDataParseError("Received empty payload from API")
-
-        try:
-            data = json.loads(raw_response)
-        except json.JSONDecodeError as err:
-            raise MarketDataParseError(f"Malformed JSON response: {err}")
-
-        if not isinstance(data, dict):
-            raise MarketDataParseError("Invalid API response format: expected a dictionary")
-
-        required_keys = ["symbol", "price", "volume_24h"]
-        for key in required_keys:
-            if key not in data:
-                raise MarketDataParseError(f"Missing required key in response: {key}")
-
-        symbol = str(data["symbol"]).upper().strip()
-        if not symbol:
-            raise MarketDataParseError("Symbol field cannot be empty")
-
-        try:
-            price = float(data["price"])
-            volume = float(data["volume_24h"])
-        except (ValueError, TypeError) as err:
-            raise MarketDataParseError(f"Numeric validation error for price or volume: {err}")
-
-        if price <= 0:
-            raise MarketDataParseError(f"Invalid non-positive price encountered: {price}")
-        if volume < 0:
-            raise MarketDataParseError(f"Invalid negative volume encountered: {volume}")
+def format_crypto_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalizes API response into standard tracking format."""
+    try:
+        ticker = raw_data.get("symbol", "UNKNOWN").upper()
+        price_raw = raw_data.get("price", "0.0")
+        volume_raw = raw_data.get("volume_24h", "0.0")
 
         return {
-            "symbol": symbol,
-            "price": price,
-            "volume_24h": volume,
-            "change_24h": float(data.get("change_24h", 0.0))
+            "ticker": ticker,
+            "price_usd": float(decimal.Decimal(str(price_raw))),
+            "volume_24h": float(decimal.Decimal(str(volume_raw))),
+            "is_active": raw_data.get("status") == "live"
         }
+    except (ValueError, decimal.InvalidOperation):
+        return {"error": "invalid numerical format provided"}
+
+def calculate_percent_change(current: float, previous: float) -> Optional[float]:
+    """Calculates price variance percentage between intervals."""
+    if previous == 0:
+        return None
+    
+    diff = current - previous
+    return round((diff / previous) * 100, 4)
+
+def sanitize_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Strips empty values from incoming socket streams."""
+    return {k: v for k, v in data.items() if v is not None}

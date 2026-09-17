@@ -1,18 +1,16 @@
-import json
 import os
+import json
 from typing import Any, Dict
 
 DEFAULT_CONFIG = {
-    "api_base_url": "https://api.coingecko.com/api/v3",
-    "refresh_interval": 60,
-    "currency": "usd",
-    "timeout": 10
+    "api_url": "https://api.crypto-tracker-65.com",
+    "refresh_rate": 60,
+    "currency": "USD",
+    "retries": 3
 }
 
 def load_config(config_path: str = "config.json") -> Dict[str, Any]:
-    """
-    Loads configuration from a JSON file, merging with defaults.
-    """
+    """Load configuration from file or return defaults."""
     config = DEFAULT_CONFIG.copy()
 
     if os.path.exists(config_path):
@@ -21,11 +19,11 @@ def load_config(config_path: str = "config.json") -> Dict[str, Any]:
                 user_config = json.load(f)
                 config.update(user_config)
         except (json.JSONDecodeError, IOError) as e:
-            print(f"Warning: Could not load config file: {e}. Using defaults.")
+            print(f"Warning: failed to load {config_path}: {e}")
     
     return config
 
-if __name__ == "__main__":
-    # Example usage for crypto-tracker-65
-    current_config = load_config()
-    print(f"Loaded configuration: {current_config}")
+def get_setting(key: str, default: Any = None) -> Any:
+    """Retrieve specific setting from global state."""
+    config = load_config()
+    return config.get(key, default)

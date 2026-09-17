@@ -1,34 +1,32 @@
-import functools
-import time
-from typing import Dict, Any
+import requests
+from typing import Dict, Optional
 
-# global cache for ticker price lookups to minimize redundant network calls
-_PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
-_CACHE_TTL = 30  # seconds
+class CryptoTracker:
+    def __init__(self, api_url: str):
+        self.api_url = api_url
 
-@functools.lru_cache(maxsize=128)
-def get_normalized_ticker(symbol: str) -> str:
-    """standardize crypto symbols for internal processing"""
-    return symbol.strip().upper()
+    def fetch_price(self, symbol: str) -> Optional[float]:
+        """Retrieves cryptocurrency price with error handling."""
+        if not symbol or not isinstance(symbol, str):
+            return None
 
-def get_cached_price(symbol: str, fetch_func: callable) -> float:
-    """memoization pattern with expiration for crypto data"""
-    now = time.time()
-    ticker = get_normalized_ticker(symbol)
+        try:
+            response = requests.get(f"{self.api_url}/price/{symbol}", timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            return float(data.get("price", 0.0))
+        except requests.exceptions.RequestException as e:
+            print(f"Network error for {symbol}: {e}")
+            return None
+        except (ValueError, TypeError, KeyError) as e:
+            print(f"Data parsing error for {symbol}: {e}")
+            return None
 
-    if ticker in _PRICE_CACHE:
-        data = _PRICE_CACHE[ticker]
-        if now - data['timestamp'] < _CACHE_TTL:
-            return data['price']
-
-    # fetch fresh data if expired or missing
-    price = fetch_func(ticker)
-    _PRICE_CACHE[ticker] = {
-        'price': price,
-        'timestamp': now
-    }
-    return price
-
-def batch_update_prices(symbols: list, fetch_func: callable) -> Dict[str, float]:
-    """optimized bulk lookup for multiple trading pairs"""
-    return {s: get_cached_price(s, fetch_func) for s in symbols}
+    def get_market_data(self, symbols: list) -> Dict[str, float]:
+        """Batch processor for multiple currency symbols."""
+        results = {}
+        for symbol in symbols:
+            price = self.fetch_price(symbol)
+            if price is not None:
+                results[symbol] = price
+        return results

@@ -1,42 +1,47 @@
-import re
-from typing import Dict, Any, Union
+from typing import Union, Optional
 
-# Regex for standard crypto ticker symbols (2 to 10 alphanumeric characters)
-SYMBOL_PATTERN = re.compile(r"^[A-Z0-9]{2,10}$")
 
-def validate_ticker(symbol: str) -> bool:
-    """Validates if the ticker symbol conforms to standard crypto formats."""
+def validate_symbol(symbol: str) -> bool:
+    """
+    Checks if the provided crypto ticker symbol is formatted correctly.
+    
+    Args:
+        symbol: The currency ticker string (e.g., 'BTC').
+        
+    Returns:
+        bool: True if the symbol is uppercase and 3-5 chars long.
+    """
     if not isinstance(symbol, str):
         return False
-    return bool(SYMBOL_PATTERN.match(symbol.upper()))
+    return 3 <= len(symbol) <= 5 and symbol.isalpha() and symbol.isupper()
 
-def validate_price(price: Union[int, float]) -> bool:
-    """Ensures the cryptocurrency price is a positive float or int."""
-    if not isinstance(price, (int, float)):
-        return False
-    return price > 0.0
 
-def validate_transaction_payload(payload: Dict[str, Any]) -> bool:
+def validate_amount(amount: Union[int, float]) -> bool:
     """
-    Validates incoming transaction payloads before processing.
-    Expected structure containing symbol, amount, and price.
+    Ensures the trade amount is a positive numerical value.
+    
+    Args:
+        amount: The value to validate.
+        
+    Returns:
+        bool: True if amount is positive and numeric.
     """
-    if not isinstance(payload, dict):
+    if not isinstance(amount, (int, float)):
         return False
+    return amount > 0
 
-    required_keys = {"symbol", "amount", "price"}
-    if not required_keys.issubset(payload.keys()):
-        return False
 
-    if not validate_ticker(payload["symbol"]):
-        return False
-
-    try:
-        amount = float(payload["amount"])
-        price = float(payload["price"])
-        if amount <= 0 or price <= 0:
-            return False
-    except (ValueError, TypeError):
-        return False
-
-    return True
+def sanitize_pair(base: str, quote: str) -> Optional[str]:
+    """
+    Constructs a normalized trading pair string.
+    
+    Args:
+        base: Base currency ticker.
+        quote: Quote currency ticker.
+        
+    Returns:
+        Normalized pair string or None if inputs are invalid.
+    """
+    if validate_symbol(base) and validate_symbol(quote):
+        return f"{base}/{quote}"
+    return None

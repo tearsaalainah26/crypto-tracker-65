@@ -1,36 +1,30 @@
 import logging
-from typing import Optional, Any
+from typing import Dict, Any, Optional
 
+# Configure logger for tracking operations
 logger = logging.getLogger('crypto-tracker-65')
 
-class CryptoError(Exception):
-    """Base exception for crypto-tracker-65."""
-    pass
+def format_price(amount: float, precision: int = 2) -> str:
+    """Formats crypto price to currency string."""
+    return f"${amount:,.{precision}f}"
 
-def safe_get_price(data: dict, symbol: str) -> Optional[float]:
-    """Extracts price from API response with defensive checks."""
+def validate_ticker(ticker: str) -> bool:
+    """Checks if ticker format is valid uppercase."""
+    return isinstance(ticker, str) and ticker.isalpha() and ticker.isupper()
+
+def normalize_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Standardizes API response dictionaries."""
+    return {
+        'symbol': raw_data.get('s', 'UNKNOWN'),
+        'price': float(raw_data.get('p', 0.0)),
+        'volume': float(raw_data.get('v', 0.0)),
+        'timestamp': raw_data.get('t')
+    }
+
+def safe_get(data: Dict[str, Any], key: str, default: Any = None) -> Any:
+    """Access nested data safely with defaults."""
     try:
-        if not isinstance(data, dict):
-            raise ValueError('Invalid data format')
-        
-        price = data.get('market_data', {}).get(symbol, {}).get('price')
-        
-        if price is None:
-            logger.warning(f'Price data missing for {symbol}')
-            return None
-            
-        return float(price)
-    except (ValueError, TypeError, AttributeError) as e:
-        logger.error(f'Data parsing failed for {symbol}: {e}')
-        return None
-
-def validate_ticker(ticker: Any) -> str:
-    """Validates ticker format before external requests."""
-    if not isinstance(ticker, str):
-        raise CryptoError('Ticker must be a string')
-    
-    cleaned = ticker.strip().upper()
-    if not cleaned.isalnum():
-        raise CryptoError(f'Invalid characters in ticker: {cleaned}')
-    
-    return cleaned
+        return data.get(key, default)
+    except AttributeError:
+        logger.error(f"Invalid data structure provided for key: {key}")
+        return default

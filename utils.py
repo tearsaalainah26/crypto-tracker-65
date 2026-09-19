@@ -1,29 +1,30 @@
-import time
-import functools
-import requests
-from typing import Callable, Any
+from typing import Dict, Any, Optional
+from decimal import Decimal, InvalidOperation
 
-def retry_network_request(max_retries: int = 3, delay: float = 2.0):
-    """Decorator for retrying network operations on failure."""
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            last_exception = None
-            for attempt in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except (requests.exceptions.RequestException, ConnectionError) as e:
-                    last_exception = e
-                    if attempt < max_retries - 1:
-                        time.sleep(delay * (2 ** attempt))
-            raise last_exception
-        return wrapper
-    return decorator
+def format_crypto_price(price: Any, currency: str = 'USD') -> str:
+    """Format raw crypto data into a user-friendly string."""
+    try:
+        value = Decimal(str(price))
+        return f"{value:,.2f} {currency.upper()}"
+    except (InvalidOperation, ValueError):
+        return f"N/A {currency.upper()}"
 
-@retry_network_request(max_retries=3, delay=1.0)
-def fetch_crypto_price(ticker: str) -> float:
-    """Example function for fetching crypto data from an endpoint."""
-    url = f"https://api.crypto-tracker-65.com/price/{ticker}"
-    response = requests.get(url, timeout=5)
-    response.raise_for_status()
-    return float(response.json().get("price", 0.0))
+def calculate_portfolio_value(holdings: Dict[str, float], prices: Dict[str, float]) -> float:
+    """Calculate total value of holdings based on current market prices."""
+    total = 0.0
+    for asset, amount in holdings.items():
+        price = prices.get(asset, 0.0)
+        total += amount * price
+    return round(total, 2)
+
+def sanitize_asset_symbol(symbol: Optional[str]) -> str:
+    """Normalize cryptocurrency symbols to uppercase."""
+    if not symbol or not isinstance(symbol, str):
+        return "UNKNOWN"
+    return symbol.strip().upper()
+
+def get_percentage_change(current: float, previous: float) -> float:
+    """Determine the percentage difference between two values."""
+    if previous == 0:
+        return 0.0
+    return round(((current - previous) / previous) * 100, 2)

@@ -1,32 +1,62 @@
 import re
-from typing import Any, Optional
+import math
+from typing import Any
 
-# Supported cryptocurrency ticker patterns
-VALID_TICKER_PATTERN = re.compile(r'^[A-Z0-9]{2,10}$')
+class CryptoValidationError(Exception):
+    """Custom exception raised when crypto data validation fails."""
+    pass
 
-def validate_ticker(ticker: Any) -> str:
-    """Validates that the input is a proper cryptocurrency ticker."""
-    if not isinstance(ticker, str):
-        raise ValueError(f"Ticker must be a string, got {type(ticker).__name__}")
+
+def validate_symbol(symbol: Any) -> str:
+    """Validate and normalize a cryptocurrency trading pair or symbol."""
+    if not symbol or not isinstance(symbol, str):
+        raise CryptoValidationError("Symbol must be a non-empty string")
     
-    clean_ticker = ticker.strip().upper()
-    if not VALID_TICKER_PATTERN.match(clean_ticker):
-        raise ValueError(f"Invalid ticker format: {clean_ticker}")
+    cleaned = symbol.strip().upper()
+    if not re.match(r"^[A-Z0-9]{2,10}(/[A-Z0-9]{2,10})?$", cleaned):
+        raise CryptoValidationError(f"Invalid symbol format: {symbol}")
     
-    return clean_ticker
+    return cleaned
 
-def validate_amount(amount: Any) -> float:
-    """Validates that the input is a positive numerical amount."""
+
+def validate_amount(amount: Any, allow_zero: bool = False) -> float:
+    """Validate numeric values for prices, volumes, and balances edge cases."""
+    if amount is None:
+        raise CryptoValidationError("Amount cannot be None")
+        
     try:
-        value = float(amount)
-        if value <= 0:
-            raise ValueError("Amount must be greater than zero")
-        return value
-    except (TypeError, ValueError):
-        raise ValueError(f"Invalid numeric amount: {amount}")
+        val = float(amount)
+    except (ValueError, TypeError):
+        raise CryptoValidationError(f"Cannot convert '{amount}' to a numeric amount")
 
-def validate_input(ticker: Any, amount: Any) -> tuple[str, float]:
-    """Main interface for input validation in processing loop."""
-    validated_ticker = validate_ticker(ticker)
-    validated_amount = validate_amount(amount)
-    return validated_ticker, validated_amount
+    if math.isnan(val) or math.isinf(val):
+        raise CryptoValidationError("Amount cannot be NaN or Infinite")
+
+    if val < 0:
+        raise CryptoValidationError("Amount cannot be negative")
+
+    if not allow_zero and val == 0:
+        raise CryptoValidationError("Amount must be greater than zero")
+
+    return val
+
+
+def validate_address(address: Any, chain: str = "ETH") -> str:
+    """Basic format validation for crypto wallet addresses across supported chains."""
+    if not address or not isinstance(address, str):
+        raise CryptoValidationError("Wallet address must be a non-empty string")
+
+    addr = address.strip()
+    chain_upper = chain.upper()
+    
+    if chain_upper == "ETH":
+        if not re.match(r"^0x[a-fA-F0-9]{40}$", addr):
+            raise CryptoValidationError(f"Invalid Ethereum address format: {address}")
+    elif chain_upper == "BTC":
+        if not re.match(r"^(1|3|bc1)[a-zA-1-9]{25,59}$", addr):
+            raise CryptoValidationError(f"Invalid Bitcoin address format: {address}")
+    else:
+        if len(addr) < 10 or len(addr) > 100:
+            raise CryptoValidationError(f"Invalid generic address length for chain {chain}")
+
+    return addr

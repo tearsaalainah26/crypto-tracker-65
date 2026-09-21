@@ -1,44 +1,61 @@
-import time
-from typing import Dict, Optional, Tuple
+import asyncio
+from collections import deque
+from typing import Dict, List, Optional, Tuple
 
-class PriceCache:
-    """An in-memory TTL cache to store token prices and avoid redundant lookups."""
-    def __init__(self, ttl_seconds: int = 10):
-        self.ttl: int = ttl_seconds
-        self._cache: Dict[str, Tuple[float, float]] = {}
 
-    def get(self, symbol: str) -> Optional[float]:
-        """Retrieve token price if it exists and has not expired."""
-        if symbol not in self._cache:
+class PriceTrackerCore:
+    """High-performance crypto price aggregation and metric calculation core."""
+
+    def __init__(self, window_size: int = 100):
+        self.window_size = window_size
+        self._price_buffers: Dict[str, deque] = {}
+        self._cache: Dict[str, Tuple[float, float, float]] = {}
+
+    def update_price(self, symbol: str, price: float) -> None:
+        """In-place update of price window with dynamic cache invalidation."""
+        if symbol not in self._price_buffers:
+            self._price_buffers[symbol] = deque(maxlen=self.window_size)
+
+        self._price_buffers[symbol].append(price)
+        self._cache.pop(symbol, None)
+
+    def get_metrics(self, symbol: str) -> Optional[Dict[str, float]]:
+        """Returns cached or freshly computed min, max, and moving average."""
+        buffer = self._price_buffers.get(symbol)
+        if not buffer:
             return None
-        price, timestamp = self._cache[symbol]
-        if time.time() - timestamp > self.ttl:
-            del self._cache[symbol]
-            return None
-        return price
 
-    def set(self, symbol: str, price: float) -> None:
-        """Cache token price with current epoch timestamp."""
-        self._cache[symbol] = (price, time.time())
+        if symbol in self._cache:
+            min_p, max_p, avg_p = self._cache[symbol]
+        else:
+            min_p = min(buffer)
+            max_p = max(buffer)
+            avg_p = sum(buffer) / len(buffer)
+            self._cache[symbol] = (min_p, max_p, avg_p)
 
-class CorePriceTracker:
-    """Optimized price retrieval tracking subsystem."""
-    def __init__(self, cache_ttl: int = 5):
-        self.cache = PriceCache(ttl_seconds=cache_ttl)
+        return {
+            "min": round(min_p, 4),
+            "max": round(max_p, 4),
+            "avg": round(avg_p, 4),
+            "samples": len(buffer),
+        }
 
-    def fetch_mock_price(self, symbol: str) -> float:
-        """Simulate api call with noticeable delay for performance testing."""
-        time.sleep(0.2)
-        mock_prices = {"BTC": 65000.0, "ETH": 3500.0, "SOL": 140.0}
-        return mock_prices.get(symbol.upper(), 0.0)
+    def batch_process_ticks(self, ticks: List[Tuple[str, float]]) -> Dict[str, Dict[str, float]]:
+        """Process multiple price ticks efficiently in a single batch."""
+        updated_symbols = set()
+        for symbol, price in ticks:
+            if symbol not in self._price_buffers:
+                self._price_buffers[symbol] = deque(maxlen=self.window_size)
+            self._price_buffers[symbol].append(price)
+            updated_symbols.add(symbol)
 
-    def get_price(self, symbol: str) -> float:
-        """Fetch token price utilizing optimized ttl cache to reduce api overhead."""
-        symbol_upper = symbol.upper()
-        cached_price = self.cache.get(symbol_upper)
-        if cached_price is not None:
-            return cached_price
-        
-        fresh_price = self.fetch_mock_price(symbol_upper)
-        self.cache.set(symbol_upper, fresh_price)
-        return fresh_price
+        for sym in updated_symbols:
+            self._cache.pop(sym, None)
+
+        results = {}
+        for sym in updated_symbols:
+            metrics = self.get_metrics(sym)
+            if metrics:
+                results[sym] = metrics
+
+        return results

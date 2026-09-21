@@ -1,30 +1,38 @@
-import decimal
-from typing import Dict, Any, Optional
+import logging
+from typing import Dict, Any
+from core import CryptoFetcher
 
-def format_crypto_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalizes API response into standard tracking format."""
-    try:
-        ticker = raw_data.get("symbol", "UNKNOWN").upper()
-        price_raw = raw_data.get("price", "0.0")
-        volume_raw = raw_data.get("volume_24h", "0.0")
+logger = logging.getLogger(__name__)
 
-        return {
-            "ticker": ticker,
-            "price_usd": float(decimal.Decimal(str(price_raw))),
-            "volume_24h": float(decimal.Decimal(str(volume_raw))),
-            "is_active": raw_data.get("status") == "live"
-        }
-    except (ValueError, decimal.InvalidOperation):
-        return {"error": "invalid numerical format provided"}
+class CryptoHandler:
+    """Handles incoming crypto requests and orchestrates data fetching."""
 
-def calculate_percent_change(current: float, previous: float) -> Optional[float]:
-    """Calculates price variance percentage between intervals."""
-    if previous == 0:
-        return None
-    
-    diff = current - previous
-    return round((diff / previous) * 100, 4)
+    def __init__(self, fetcher: CryptoFetcher):
+        self.fetcher = fetcher
 
-def sanitize_payload(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Strips empty values from incoming socket streams."""
-    return {k: v for k, v in data.items() if v is not None}
+    def process_request(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validates request and retrieves latest market data."""
+        symbol = request_data.get("symbol")
+        
+        if not symbol:
+            logger.error("Missing symbol in request data")
+            return {"status": "error", "message": "symbol required"}
+
+        try:
+            data = self.fetcher.get_price(symbol)
+            return {
+                "status": "success",
+                "symbol": symbol,
+                "price": data.get("price"),
+                "timestamp": data.get("ts")
+            }
+        except Exception as e:
+            logger.exception(f"Failed to process symbol {symbol}")
+            return {"status": "error", "message": str(e)}
+
+    def batch_process(self, symbols: list) -> list:
+        """Handles multiple symbol queries efficiently."""
+        results = []
+        for symbol in symbols:
+            results.append(self.process_request({"symbol": symbol}))
+        return results

@@ -1,61 +1,32 @@
-import asyncio
-from collections import deque
-from typing import Dict, List, Optional, Tuple
+import logging
+from typing import Dict, List, Optional
 
+# Configure logging for crypto-tracker-65
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('crypto-tracker-65')
 
-class PriceTrackerCore:
-    """High-performance crypto price aggregation and metric calculation core."""
+class CryptoTracker:
+    def __init__(self, assets: List[str]):
+        self.assets = assets
+        self.prices: Dict[str, float] = {}
 
-    def __init__(self, window_size: int = 100):
-        self.window_size = window_size
-        self._price_buffers: Dict[str, deque] = {}
-        self._cache: Dict[str, Tuple[float, float, float]] = {}
+    def update_prices(self, provider_data: Dict[str, float]) -> None:
+        """Synchronizes tracker state with new price data."""
+        for asset in self.assets:
+            price = provider_data.get(asset)
+            if price is not None:
+                self.prices[asset] = price
+        logger.info(f"Updated {len(self.prices)} assets")
 
-    def update_price(self, symbol: str, price: float) -> None:
-        """In-place update of price window with dynamic cache invalidation."""
-        if symbol not in self._price_buffers:
-            self._price_buffers[symbol] = deque(maxlen=self.window_size)
+    def get_summary(self) -> str:
+        """Formats asset prices for notification."""
+        return ", ".join([f"{k}: ${v:.2f}" for k, v in self.prices.items()])
 
-        self._price_buffers[symbol].append(price)
-        self._cache.pop(symbol, None)
+    def validate_input(self, data: Dict) -> bool:
+        """Ensures incoming price payload contains required fields."""
+        return all(asset in data for asset in self.assets)
 
-    def get_metrics(self, symbol: str) -> Optional[Dict[str, float]]:
-        """Returns cached or freshly computed min, max, and moving average."""
-        buffer = self._price_buffers.get(symbol)
-        if not buffer:
-            return None
-
-        if symbol in self._cache:
-            min_p, max_p, avg_p = self._cache[symbol]
-        else:
-            min_p = min(buffer)
-            max_p = max(buffer)
-            avg_p = sum(buffer) / len(buffer)
-            self._cache[symbol] = (min_p, max_p, avg_p)
-
-        return {
-            "min": round(min_p, 4),
-            "max": round(max_p, 4),
-            "avg": round(avg_p, 4),
-            "samples": len(buffer),
-        }
-
-    def batch_process_ticks(self, ticks: List[Tuple[str, float]]) -> Dict[str, Dict[str, float]]:
-        """Process multiple price ticks efficiently in a single batch."""
-        updated_symbols = set()
-        for symbol, price in ticks:
-            if symbol not in self._price_buffers:
-                self._price_buffers[symbol] = deque(maxlen=self.window_size)
-            self._price_buffers[symbol].append(price)
-            updated_symbols.add(symbol)
-
-        for sym in updated_symbols:
-            self._cache.pop(sym, None)
-
-        results = {}
-        for sym in updated_symbols:
-            metrics = self.get_metrics(sym)
-            if metrics:
-                results[sym] = metrics
-
-        return results
+def initialize_tracker(assets: List[str]) -> CryptoTracker:
+    """Factory method for core tracker component."""
+    logger.info("Initializing core crypto tracker")
+    return CryptoTracker(assets=assets)

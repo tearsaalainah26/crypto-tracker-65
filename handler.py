@@ -1,38 +1,31 @@
-import logging
-from typing import Dict, Any
-from core import CryptoFetcher
+import time
+import requests
+from functools import wraps
+from typing import Callable, Any
 
-logger = logging.getLogger(__name__)
+def with_retry(max_attempts: int = 3, delay: float = 2.0):
+    """Decorator for retrying network operations on failure."""
+    def decorator(func: Callable):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except (requests.RequestException, ConnectionError) as e:
+                    attempts += 1
+                    if attempts >= max_attempts:
+                        raise e
+                    time.sleep(delay * attempts)
+            return None
+        return wrapper
+    return decorator
 
-class CryptoHandler:
-    """Handles incoming crypto requests and orchestrates data fetching."""
-
-    def __init__(self, fetcher: CryptoFetcher):
-        self.fetcher = fetcher
-
-    def process_request(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Validates request and retrieves latest market data."""
-        symbol = request_data.get("symbol")
-        
-        if not symbol:
-            logger.error("Missing symbol in request data")
-            return {"status": "error", "message": "symbol required"}
-
-        try:
-            data = self.fetcher.get_price(symbol)
-            return {
-                "status": "success",
-                "symbol": symbol,
-                "price": data.get("price"),
-                "timestamp": data.get("ts")
-            }
-        except Exception as e:
-            logger.exception(f"Failed to process symbol {symbol}")
-            return {"status": "error", "message": str(e)}
-
-    def batch_process(self, symbols: list) -> list:
-        """Handles multiple symbol queries efficiently."""
-        results = []
-        for symbol in symbols:
-            results.append(self.process_request({"symbol": symbol}))
-        return results
+@with_retry(max_attempts=3, delay=1.5)
+def fetch_crypto_price(ticker: str) -> float:
+    """Fetches live price data from crypto exchange API."""
+    url = f"https://api.exchange.com/v1/price/{ticker}"
+    response = requests.get(url, timeout=5)
+    response.raise_for_status()
+    data = response.json()
+    return float(data.get('price', 0.0))

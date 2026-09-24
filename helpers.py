@@ -1,30 +1,41 @@
 import logging
-from typing import Dict, Any, Optional
+import requests
+from requests.exceptions import RequestException, Timeout
 
-# Configure logger for tracking operations
 logger = logging.getLogger('crypto-tracker-65')
 
-def format_price(amount: float, precision: int = 2) -> str:
-    """Formats crypto price to currency string."""
-    return f"${amount:,.{precision}f}"
-
-def validate_ticker(ticker: str) -> bool:
-    """Checks if ticker format is valid uppercase."""
-    return isinstance(ticker, str) and ticker.isalpha() and ticker.isupper()
-
-def normalize_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Standardizes API response dictionaries."""
-    return {
-        'symbol': raw_data.get('s', 'UNKNOWN'),
-        'price': float(raw_data.get('p', 0.0)),
-        'volume': float(raw_data.get('v', 0.0)),
-        'timestamp': raw_data.get('t')
-    }
-
-def safe_get(data: Dict[str, Any], key: str, default: Any = None) -> Any:
-    """Access nested data safely with defaults."""
+def fetch_crypto_price(symbol: str) -> float:
+    """Fetches current market price with resilience."""
+    url = f"https://api.exchange.com/v1/ticker/{symbol}"
+    
     try:
-        return data.get(key, default)
-    except AttributeError:
-        logger.error(f"Invalid data structure provided for key: {key}")
-        return default
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        if 'price' not in data:
+            raise ValueError(f"Invalid API response structure for {symbol}")
+            
+        return float(data['price'])
+
+    except Timeout:
+        logger.error(f"Network timeout while fetching {symbol}")
+        return 0.0
+    except RequestException as e:
+        logger.error(f"Network error for {symbol}: {e}")
+        return 0.0
+    except (ValueError, TypeError, KeyError) as e:
+        logger.error(f"Data parsing failure for {symbol}: {e}")
+        return 0.0
+
+def sanitize_input(symbol: str) -> str:
+    """Ensures crypto ticker is safe for API requests."""
+    if not symbol or not isinstance(symbol, str):
+        return "BTC"
+    
+    clean = symbol.strip().upper()
+    if not clean.isalnum():
+        logger.warning(f"Invalid characters in ticker: {clean}")
+        return "BTC"
+        
+    return clean

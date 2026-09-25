@@ -1,41 +1,25 @@
-import logging
+from typing import Dict, Any, List, Optional
 import requests
-from requests.exceptions import RequestException, Timeout
 
-logger = logging.getLogger('crypto-tracker-65')
+def format_currency(amount: float, symbol: str = 'USD') -> str:
+    """Formats a float amount into a currency string."""
+    return f"{amount:,.2f} {symbol}"
 
-def fetch_crypto_price(symbol: str) -> float:
-    """Fetches current market price with resilience."""
-    url = f"https://api.exchange.com/v1/ticker/{symbol}"
-    
-    try:
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        data = response.json()
-        
-        if 'price' not in data:
-            raise ValueError(f"Invalid API response structure for {symbol}")
-            
-        return float(data['price'])
+def fetch_ticker_data(api_url: str, symbols: List[str]) -> Dict[str, Any]:
+    """Fetches price data for a list of crypto symbols."""
+    params = {"ids": ",".join(symbols), "vs_currencies": "usd"}
+    response = requests.get(api_url, params=params)
+    response.raise_for_status()
+    return response.json()
 
-    except Timeout:
-        logger.error(f"Network timeout while fetching {symbol}")
-        return 0.0
-    except RequestException as e:
-        logger.error(f"Network error for {symbol}: {e}")
-        return 0.0
-    except (ValueError, TypeError, KeyError) as e:
-        logger.error(f"Data parsing failure for {symbol}: {e}")
-        return 0.0
+def calculate_portfolio_value(holdings: Dict[str, float], prices: Dict[str, float]) -> float:
+    """Calculates total value of portfolio based on market prices."""
+    total = 0.0
+    for coin, quantity in holdings.items():
+        price = prices.get(coin, {}).get('usd', 0.0)
+        total += quantity * price
+    return total
 
-def sanitize_input(symbol: str) -> str:
-    """Ensures crypto ticker is safe for API requests."""
-    if not symbol or not isinstance(symbol, str):
-        return "BTC"
-    
-    clean = symbol.strip().upper()
-    if not clean.isalnum():
-        logger.warning(f"Invalid characters in ticker: {clean}")
-        return "BTC"
-        
-    return clean
+def validate_response_structure(data: Dict[str, Any], keys: List[str]) -> bool:
+    """Ensures API response contains required keys."""
+    return all(key in data for key in keys)

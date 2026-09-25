@@ -1,29 +1,40 @@
-from typing import Dict, List, Optional
-from decimal import Decimal
+import time
+import requests
+import logging
+from typing import Callable, Any
 
-def calculate_portfolio_value(holdings: Dict[str, Decimal], market_data: Dict[str, Decimal]) -> Decimal:
-    """Calculates total value of crypto assets in USD."""
-    total_value = Decimal('0.00')
-    for asset, amount in holdings.items():
-        price = market_data.get(asset, Decimal('0.00'))
-        total_value += amount * price
-    return total_value.quantize(Decimal('0.01'))
+logger = logging.getLogger(__name__)
 
-def sanitize_market_data(raw_data: List[Dict]) -> Dict[str, Decimal]:
-    """Converts raw API list into normalized symbol-to-price mapping."""
-    processed = {}
-    for entry in raw_data:
-        symbol = entry.get('symbol', '').upper()
-        price = entry.get('price', '0')
+def with_retry(func: Callable, retries: int = 3, delay: int = 2) -> Any:
+    """Executes network operations with exponential backoff."""
+    for attempt in range(retries):
         try:
-            processed[symbol] = Decimal(str(price))
-        except (ValueError, TypeError):
-            continue
-    return processed
+            return func()
+        except (requests.RequestException, ConnectionError) as e:
+            if attempt == retries - 1:
+                logger.error(f"Final attempt failed: {e}")
+                raise
+            logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s...")
+            time.sleep(delay)
+            delay *= 2
 
-def get_asset_delta(current_price: Decimal, previous_price: Decimal) -> float:
-    """Calculates percentage change between price points."""
-    if previous_price == 0:
-        return 0.0
-    delta = ((current_price - previous_price) / previous_price) * 100
-    return float(round(delta, 2))
+class CryptoDataProcessor:
+    def __init__(self, api_url: str):
+        self.api_url = api_url
+
+    def fetch_price(self, symbol: str) -> dict:
+        """Fetches price data for a given crypto symbol."""
+        def _request():
+            response = requests.get(f"{self.api_url}/price/{symbol}", timeout=10)
+            response.raise_for_status()
+            return response.json()
+
+        return with_retry(_request)
+
+if __name__ == "__main__":
+    processor = CryptoDataProcessor("https://api.crypto-tracker-65.io")
+    try:
+        data = processor.fetch_price("BTC")
+        print(data)
+    except Exception as err:
+        print(f"Critical failure: {err}")

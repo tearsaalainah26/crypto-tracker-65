@@ -1,51 +1,66 @@
-import re
-from typing import Any, Dict
+import time
+from typing import Dict, Any, Tuple, Optional, List
 
-# Common patterns for crypto validation
-SYMBOL_PATTERN = re.compile(r"^[A-Z0-9]{2,10}$")
-EVM_ADDRESS_PATTERN = re.compile(r"^0x[a-fA-F0-9]{40}$")
+def validate_crypto_payload(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """
+    Validates incoming cryptocurrency market data payloads.
+    Returns a tuple containing (is_valid, error_message).
+    """
+    if not isinstance(data, dict):
+        return False, "Payload must be a dictionary"
 
+    required_keys = {"symbol", "price", "volume", "timestamp"}
+    missing_keys = required_keys - data.keys()
+    if missing_keys:
+        return False, f"Missing required fields: {', '.join(missing_keys)}"
 
-def validate_symbol(symbol: Any) -> bool:
-    """Validates if the ticker symbol is valid (e.g., BTC, ETH)."""
-    if not isinstance(symbol, str):
-        return False
-    return bool(SYMBOL_PATTERN.match(symbol.strip().upper()))
+    # Validate symbol format (e.g., BTC, ETH, SOL)
+    symbol = data["symbol"]
+    if not isinstance(symbol, str) or not (2 <= len(symbol) <= 10):
+        return False, f"Invalid symbol '{symbol}': must be 2-10 characters"
+    if not symbol.isalnum():
+        return False, f"Invalid symbol '{symbol}': must be alphanumeric"
 
-
-def validate_wallet_address(address: Any) -> bool:
-    """Validates if the string is a valid EVM wallet address."""
-    if not isinstance(address, str):
-        return False
-    return bool(EVM_ADDRESS_PATTERN.match(address.strip()))
-
-
-def validate_transaction_payload(payload: Dict[str, Any]) -> bool:
-    """Validates transaction payload in the processing loop."""
-    if not isinstance(payload, dict):
-        return False
-
-    required_fields = ["symbol", "amount", "price", "wallet"]
-    if not all(field in payload for field in required_fields):
-        return False
-
-    symbol = payload.get("symbol")
-    amount = payload.get("amount")
-    price = payload.get("price")
-    wallet = payload.get("wallet")
-
-    if not validate_symbol(symbol):
-        return False
-
-    if not validate_wallet_address(wallet):
-        return False
-
+    # Validate numeric price
     try:
-        val_amount = float(amount) if amount is not None else -1.0
-        val_price = float(price) if price is not None else -1.0
-        if val_amount <= 0 or val_price <= 0:
-            return False
+        price = float(data["price"])
+        if price <= 0:
+            return False, f"Invalid price {price}: must be greater than zero"
     except (ValueError, TypeError):
-        return False
+        return False, "Price must be a valid decimal number"
 
-    return True
+    # Validate numeric volume
+    try:
+        volume = float(data["volume"])
+        if volume < 0:
+            return False, f"Invalid volume {volume}: cannot be negative"
+    except (ValueError, TypeError):
+        return False, "Volume must be a valid decimal number"
+
+    # Validate reasonable epoch timestamp (within 24 hours of current time)
+    try:
+        timestamp = float(data["timestamp"])
+        current_time = time.time()
+        one_day = 86400
+        if not (current_time - one_day <= timestamp <= current_time + one_day):
+            return False, f"Timestamp {timestamp} is out of realistic sync bounds"
+    except (ValueError, TypeError):
+        return False, "Timestamp must be a valid Unix epoch timestamp"
+
+    return True, None
+
+def filter_invalid_payloads(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Filters and normalizes a batch of cryptocurrency payloads, skipping invalid entries.
+    """
+    valid_records = []
+    for item in batch:
+        is_valid, error = validate_crypto_payload(item)
+        if is_valid:
+            valid_records.append({
+                "symbol": str(item["symbol"]).upper(),
+                "price": float(item["price"]),
+                "volume": float(item["volume"]),
+                "timestamp": int(item["timestamp"])
+            })
+    return valid_records

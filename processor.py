@@ -1,40 +1,31 @@
-import time
-import requests
-import logging
-from typing import Callable, Any
+from typing import List, Dict, Any, Optional
 
-logger = logging.getLogger(__name__)
+def calculate_portfolio_value(holdings: List[Dict[str, float]], prices: Dict[str, float]) -> float:
+    """Calculates total portfolio value based on current market prices."""
+    total = 0.0
+    for asset in holdings:
+        symbol = asset.get('symbol')
+        amount = asset.get('amount', 0.0)
+        if symbol in prices:
+            total += amount * prices[symbol]
+    return round(total, 2)
 
-def with_retry(func: Callable, retries: int = 3, delay: int = 2) -> Any:
-    """Executes network operations with exponential backoff."""
-    for attempt in range(retries):
-        try:
-            return func()
-        except (requests.RequestException, ConnectionError) as e:
-            if attempt == retries - 1:
-                logger.error(f"Final attempt failed: {e}")
-                raise
-            logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s...")
-            time.sleep(delay)
-            delay *= 2
+def format_price_change(change: float) -> str:
+    """Formats price percentage change with indicator symbols."""
+    indicator = '+' if change >= 0 else ''
+    return f"{indicator}{change:.2f}%"
 
-class CryptoDataProcessor:
-    def __init__(self, api_url: str):
-        self.api_url = api_url
+def normalize_crypto_data(raw_data: List[Dict[str, Any]]) -> Dict[str, float]:
+    """Extracts current price map from API response objects."""
+    price_map = {}
+    for entry in raw_data:
+        symbol = entry.get('symbol', '').upper()
+        price = entry.get('price_usd')
+        if symbol and isinstance(price, (int, float)):
+            price_map[symbol] = float(price)
+    return price_map
 
-    def fetch_price(self, symbol: str) -> dict:
-        """Fetches price data for a given crypto symbol."""
-        def _request():
-            response = requests.get(f"{self.api_url}/price/{symbol}", timeout=10)
-            response.raise_for_status()
-            return response.json()
-
-        return with_retry(_request)
-
-if __name__ == "__main__":
-    processor = CryptoDataProcessor("https://api.crypto-tracker-65.io")
-    try:
-        data = processor.fetch_price("BTC")
-        print(data)
-    except Exception as err:
-        print(f"Critical failure: {err}")
+def validate_asset_entry(entry: Dict[str, Any]) -> bool:
+    """Checks if asset record has required fields."""
+    required = ['symbol', 'amount']
+    return all(key in entry for key in required) and entry['amount'] > 0

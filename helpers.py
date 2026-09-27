@@ -1,25 +1,28 @@
-from typing import Dict, Any, List, Optional
-import requests
+import decimal
+from typing import Union
 
-def format_currency(amount: float, symbol: str = 'USD') -> str:
-    """Formats a float amount into a currency string."""
-    return f"{amount:,.2f} {symbol}"
+def format_currency(value: Union[float, str, decimal.Decimal], precision: int = 2) -> str:
+    """Formats crypto price or balance values to standard strings."""
+    val = decimal.Decimal(str(value))
+    return f"{val:.{precision}f}"
 
-def fetch_ticker_data(api_url: str, symbols: List[str]) -> Dict[str, Any]:
-    """Fetches price data for a list of crypto symbols."""
-    params = {"ids": ",".join(symbols), "vs_currencies": "usd"}
-    response = requests.get(api_url, params=params)
-    response.raise_for_status()
-    return response.json()
+def calculate_percentage_change(old_value: float, new_value: float) -> float:
+    """Calculates simple percentage change between two values."""
+    if old_value == 0:
+        return 0.0
+    return ((new_value - old_value) / abs(old_value)) * 100
 
-def calculate_portfolio_value(holdings: Dict[str, float], prices: Dict[str, float]) -> float:
-    """Calculates total value of portfolio based on market prices."""
-    total = 0.0
-    for coin, quantity in holdings.items():
-        price = prices.get(coin, {}).get('usd', 0.0)
-        total += quantity * price
-    return total
+def validate_ticker(ticker: str) -> bool:
+    """Ensures ticker format matches uppercase alphanumeric requirements."""
+    return bool(ticker and ticker.isalnum() and ticker.isupper())
 
-def validate_response_structure(data: Dict[str, Any], keys: List[str]) -> bool:
-    """Ensures API response contains required keys."""
-    return all(key in data for key in keys)
+def format_asset_pair(base: str, quote: str = "USD") -> str:
+    """Standardizes ticker pairs for API requests."""
+    return f"{base.upper()}/{quote.upper()}"
+
+def sanitize_float(value: any) -> float:
+    """Safely converts input to float for trading calculations."""
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0

@@ -1,31 +1,45 @@
-from typing import List, Dict, Any, Optional
+import logging
+from typing import List, Dict, Optional
 
-def calculate_portfolio_value(holdings: List[Dict[str, float]], prices: Dict[str, float]) -> float:
-    """Calculates total portfolio value based on current market prices."""
-    total = 0.0
-    for asset in holdings:
-        symbol = asset.get('symbol')
-        amount = asset.get('amount', 0.0)
-        if symbol in prices:
-            total += amount * prices[symbol]
-    return round(total, 2)
+logger = logging.getLogger(__name__)
 
-def format_price_change(change: float) -> str:
-    """Formats price percentage change with indicator symbols."""
-    indicator = '+' if change >= 0 else ''
-    return f"{indicator}{change:.2f}%"
+class DataProcessor:
+    def __init__(self, currency_pair: str):
+        self.currency_pair = currency_pair
 
-def normalize_crypto_data(raw_data: List[Dict[str, Any]]) -> Dict[str, float]:
-    """Extracts current price map from API response objects."""
-    price_map = {}
-    for entry in raw_data:
-        symbol = entry.get('symbol', '').upper()
-        price = entry.get('price_usd')
-        if symbol and isinstance(price, (int, float)):
-            price_map[symbol] = float(price)
-    return price_map
+    def sanitize_ticker_data(self, raw_data: List[Dict]) -> List[Dict]:
+        """Removes incomplete records and normalizes field types."""
+        cleaned = []
+        for entry in raw_data:
+            try:
+                price = float(entry.get('price', 0))
+                volume = float(entry.get('volume', 0))
+                if price > 0:
+                    cleaned.append({
+                        'pair': self.currency_pair,
+                        'price': price,
+                        'volume': volume,
+                        'timestamp': entry.get('ts')
+                    })
+            except (ValueError, TypeError) as e:
+                logger.warning(f"skipping malformed record: {e}")
+        return cleaned
 
-def validate_asset_entry(entry: Dict[str, Any]) -> bool:
-    """Checks if asset record has required fields."""
-    required = ['symbol', 'amount']
-    return all(key in entry for key in required) and entry['amount'] > 0
+    def calculate_moving_average(self, data: List[Dict], period: int = 24) -> Optional[float]:
+        """Computes simple moving average for the price field."""
+        if not data or len(data) < period:
+            return None
+        
+        prices = [d['price'] for d in data[-period:]]
+        return sum(prices) / len(prices)
+
+    def process_batch(self, raw_data: List[Dict]) -> Dict:
+        """Orchestrates normalization and analytical metrics."""
+        clean_data = self.sanitize_ticker_data(raw_data)
+        avg_price = self.calculate_moving_average(clean_data)
+        
+        return {
+            'count': len(clean_data),
+            'avg_price': avg_price,
+            'pair': self.currency_pair
+        }

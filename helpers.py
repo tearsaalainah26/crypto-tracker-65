@@ -1,28 +1,36 @@
-import decimal
+import time
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Union
 
-def format_currency(value: Union[float, str, decimal.Decimal], precision: int = 2) -> str:
-    """Formats crypto price or balance values to standard strings."""
-    val = decimal.Decimal(str(value))
-    return f"{val:.{precision}f}"
+def format_currency(value: Union[float, str, Decimal], decimals: int = 2) -> str:
+    """Formats numerical values into standard currency strings."""
+    d = Decimal(str(value))
+    precision = Decimal('0.' + '0' * (decimals - 1) + '1')
+    return str(d.quantize(precision, rounding=ROUND_HALF_UP))
 
-def calculate_percentage_change(old_value: float, new_value: float) -> float:
-    """Calculates simple percentage change between two values."""
-    if old_value == 0:
+def get_timestamp() -> int:
+    """Returns current UTC unix timestamp."""
+    return int(time.time())
+
+def calculate_percentage_change(old_price: float, new_price: float) -> float:
+    """Calculates percentage difference between two price points."""
+    if old_price == 0:
         return 0.0
-    return ((new_value - old_value) / abs(old_value)) * 100
+    return ((new_price - old_price) / old_price) * 100
 
 def validate_ticker(ticker: str) -> bool:
-    """Ensures ticker format matches uppercase alphanumeric requirements."""
-    return bool(ticker and ticker.isalnum() and ticker.isupper())
+    """Checks if ticker string follows standard crypto format."""
+    if not ticker or not isinstance(ticker, str):
+        return False
+    return ticker.isalnum() and 1 <= len(ticker) <= 10
 
-def format_asset_pair(base: str, quote: str = "USD") -> str:
-    """Standardizes ticker pairs for API requests."""
-    return f"{base.upper()}/{quote.upper()}"
-
-def sanitize_float(value: any) -> float:
-    """Safely converts input to float for trading calculations."""
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return 0.0
+def retry_operation(func, retries: int = 3, delay: int = 1):
+    """Simple wrapper for retrying network-dependent functions."""
+    for i in range(retries):
+        try:
+            return func()
+        except Exception:
+            if i == retries - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2

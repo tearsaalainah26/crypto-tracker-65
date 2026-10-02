@@ -1,54 +1,55 @@
-import logging
 import os
+import logging
 from logging.handlers import RotatingFileHandler
+
+DEFAULT_LOG_DIR = "logs"
+DEFAULT_LOG_FILE = "crypto_tracker.log"
+MAX_LOG_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB per log file
+BACKUP_COUNT = 5  # Keep 5 historical log files
 
 
 def setup_logger(
     name: str = "crypto_tracker",
-    log_file: str = "crypto_tracker.log",
+    log_file: str = DEFAULT_LOG_FILE,
     level: int = logging.INFO,
-    max_bytes: int = 5 * 1024 * 1024,
-    backup_count: int = 3,
+    max_bytes: int = MAX_LOG_SIZE_BYTES,
+    backup_count: int = BACKUP_COUNT,
 ) -> logging.Logger:
-    """Configures and returns a logger with console and rotating file handlers."""
+    """Configures and returns a logger instance with console and rotating file handlers."""
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    # Clear any pre-existing handlers to avoid duplication
-    if logger.hasHandlers():
-        logger.handlers.clear()
+    # Prevent duplicate handlers if the logger is re-initialized
+    if logger.handlers:
+        return logger
 
-    # Ensure directory structure for the log file exists
-    log_dir = os.path.dirname(log_file)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    # Ensure target directory exists
+    os.makedirs(DEFAULT_LOG_DIR, exist_ok=True)
+    log_path = os.path.join(DEFAULT_LOG_DIR, log_file)
 
-    # Standard format containing time, log level, and component trace
+    # Standardized format for tracking crypto engine operations
     log_format = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        "%(asctime)s [%(levelname)s] %(name)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    # Console output handler
+    # Console handler for real-time stdout output
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(log_format)
     logger.addHandler(console_handler)
 
-    # Rolling disk logging handler
-    try:
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=max_bytes, backupCount=backup_count
-        )
-        file_handler.setFormatter(log_format)
-        logger.addHandler(file_handler)
-    except OSError as e:
-        logger.error(f"Failed to configure rotating file output: {e}")
+    # Rotating file handler to manage log size
+    file_handler = RotatingFileHandler(
+        log_path,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(log_format)
+    logger.addHandler(file_handler)
 
     return logger
 
 
-if __name__ == "__main__":
-    # Simple local smoke test
-    tracker_log = setup_logger(log_file="logs/app_runtime.log")
-    tracker_log.info("Crypto feed parsing system startup succeeded")
-    tracker_log.warning("Binance API returned high network latency (420ms)")
+# Pre-configured instance for quick usage across crypto modules
+tracker_logger = setup_logger()

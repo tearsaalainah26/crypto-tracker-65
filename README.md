@@ -1,40 +1,49 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 # crypto-tracker-65
 
-Crypto-tracker-65 is a high-performance Python utility designed to monitor real-time cryptocurrency price fluctuations across multiple exchanges. It provides actionable data insights for traders looking to track portfolio performance and market volatility with minimal latency.
+`crypto-tracker-65` is an asynchronous Python application designed to stream real-time cryptocurrency market trends, price spikes, and liquidity shifts across decentralized exchanges. It aggregates live WebSocket data from major pools to trigger instant console alerts and Telegram notifications based on user-defined volatility thresholds.
 
 ## Features
 
-*   **Multi-Exchange Integration:** Aggregates live price feeds from Binance, Coinbase, and Kraken via REST and WebSocket APIs.
-*   **Automated Alerting:** Configurable threshold triggers that send desktop notifications when assets hit specific price targets.
-*   **Portfolio Snapshot:** Calculates total asset valuation in real-time, accounting for holding quantities and base currency conversion.
-*   **CSV Data Logging:** Automatically archives price history to local storage for retrospective technical analysis and trend modeling.
+* **Multi-DEX Aggregation:** Streams live order book and trade data simultaneously from Uniswap v3, PancakeSwap, and Raydium.
+* **Volatile Spike Detection:** Triggers customizable alerts when asset price or volume deviates by a set percentage within a 60-second rolling window.
+* **Local Data Archiving:** Automatically dumps historical tick data and market depth to a local SQLite database for offline backtesting.
+* **Telegram Bot Integration:** Sends formatted, instant buy/sell volume alerts directly to your specified Telegram channel.
 
 ## Installation
 
-Ensure you have Python 3.9+ installed. Clone the repository and install the dependencies:
+Clone the repository and install the required dependencies:
 
 ```bash
 git clone https://github.com/Developer/crypto-tracker-65.git
 cd crypto-tracker-65
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## Quick Start
 
-To start tracking your primary assets, update the `config.yaml` file with your desired trading pairs and run the main entry point:
+Create a `config.py` or directly pass parameters to the `Tracker` module:
 
-```bash
-# Track default assets listed in config.yaml
-python main.py --monitor
+```python
+from crypto_tracker import Tracker
 
-# View a one-time snapshot of the current market
-python main.py --snapshot BTC,ETH,SOL
+# Initialize the tracker for target pairs
+tracker = Tracker(
+    pairs=["BTC/USDT", "ETH/USDT", "SOL/USDT"],
+    threshold_percent=2.5,
+    interval_seconds=60
+)
+
+# Define a callback for alert events
+@tracker.on_price_spike
+def handle_spike(event):
+    print(f"[ALERT] {event.pair} moved {event.change}%! Current price: ${event.price}")
+
+# Start listening to WebSocket streams
+tracker.run()
 ```
 
 ## License
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Distributed under the MIT License. See `LICENSE` for more information.

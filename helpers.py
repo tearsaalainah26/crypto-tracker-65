@@ -1,36 +1,37 @@
+import functools
 import time
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Union
+from typing import Callable, Any, Dict
 
-def format_currency(value: Union[float, str, Decimal], decimals: int = 2) -> str:
-    """Formats numerical values into standard currency strings."""
-    d = Decimal(str(value))
-    precision = Decimal('0.' + '0' * (decimals - 1) + '1')
-    return str(d.quantize(precision, rounding=ROUND_HALF_UP))
+# Cache for crypto price calculations to reduce API load
+_price_cache: Dict[str, tuple[float, float]] = {}
+CACHE_EXPIRY = 60  # seconds
 
-def get_timestamp() -> int:
-    """Returns current UTC unix timestamp."""
-    return int(time.time())
+def memoize_price_calculation(func: Callable) -> Callable:
+    """Decorator to cache result of expensive crypto math."""
+    @functools.wraps(func)
+    def wrapper(symbol: str, *args, **kwargs) -> Any:
+        current_time = time.time()
+        if symbol in _price_cache:
+            val, timestamp = _price_cache[symbol]
+            if current_time - timestamp < CACHE_EXPIRY:
+                return val
+        
+        result = func(symbol, *args, **kwargs)
+        _price_cache[symbol] = (result, current_time)
+        return result
+    return wrapper
 
-def calculate_percentage_change(old_price: float, new_price: float) -> float:
-    """Calculates percentage difference between two price points."""
-    if old_price == 0:
+@memoize_price_calculation
+def calculate_volatility(symbol: str, price_history: list[float]) -> float:
+    """Calculates simple variance for price history."""
+    if not price_history:
         return 0.0
-    return ((new_price - old_price) / old_price) * 100
+    mean = sum(price_history) / len(price_history)
+    variance = sum((x - mean) ** 2 for x in price_history) / len(price_history)
+    return float(variance ** 0.5)
 
-def validate_ticker(ticker: str) -> bool:
-    """Checks if ticker string follows standard crypto format."""
-    if not ticker or not isinstance(ticker, str):
-        return False
-    return ticker.isalnum() and 1 <= len(ticker) <= 10
-
-def retry_operation(func, retries: int = 3, delay: int = 1):
-    """Simple wrapper for retrying network-dependent functions."""
-    for i in range(retries):
-        try:
-            return func()
-        except Exception:
-            if i == retries - 1:
-                raise
-            time.sleep(delay)
-            delay *= 2
+def clear_stale_cache() -> None:
+    """Cleanup function to free memory."""
+    global _price_cache
+    _price_cache = {k: v for k, v in _price_cache.items() 
+                    if time.time() - v[1] < CACHE_EXPIRY}

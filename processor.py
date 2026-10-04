@@ -1,38 +1,57 @@
-import logging
+from typing import Dict, Any
 
-def validate_crypto_data(data):
-    """Validates incoming dictionary for crypto-tracker-65 constraints."""
-    required_fields = {'symbol', 'price', 'volume'}
-    
-    if not isinstance(data, dict):
-        return False
-        
-    if not required_fields.issubset(data.keys()):
-        return False
-        
-    if not isinstance(data['price'], (int, float)) or data['price'] < 0:
-        return False
-        
-    if not isinstance(data['symbol'], str) or len(data['symbol']) < 2:
-        return False
-        
-    return True
+class CryptoProcessor:
+    """Processes raw cryptocurrency market data to extract insights and metrics."""
 
-def run_processing_loop(data_stream):
-    """Main loop for processing crypto ticker updates."""
-    logger = logging.getLogger('crypto-tracker-65')
-    
-    for entry in data_stream:
-        try:
-            if not validate_crypto_data(entry):
-                logger.warning(f"Invalid data packet skipped: {entry}")
-                continue
-                
-            # Process valid ticker data
-            symbol = entry['symbol'].upper()
-            price = entry['price']
-            logger.info(f"Processing {symbol} at {price}")
-            
-        except Exception as e:
-            logger.error(f"Unexpected error in processing loop: {e}")
-            continue
+    def __init__(self, base_currency: str = "USD") -> None:
+        """Initialize the processor with a default target currency.
+
+        Args:
+            base_currency: The currency symbol to format values against (e.g., 'USD', 'EUR').
+        """
+        self.base_currency: str = base_currency.upper()
+
+    def calculate_price_change(self, initial_price: float, current_price: float) -> float:
+        """Calculate the percentage change between an initial and a current price.
+
+        Args:
+            initial_price: The starting price of the asset.
+            current_price: The current price of the asset.
+
+        Returns:
+            The percentage change as a float (e.g., 5.5 for a 5.5% increase).
+        """
+        if initial_price <= 0:
+            raise ValueError("Initial price must be greater than zero.")
+        
+        return ((current_price - initial_price) / initial_price) * 100.0
+
+    def is_highly_volatile(self, percentage_change: float, threshold: float = 5.0) -> bool:
+        """Determine if a price change exceeds a specific volatility threshold.
+
+        Args:
+            percentage_change: The calculated percentage price movement.
+            threshold: The volatility limit percentage.
+
+        Returns:
+            True if absolute change exceeds the threshold, False otherwise.
+        """
+        return abs(percentage_change) >= threshold
+
+    def format_summary(self, symbol: str, current_price: float, price_change: float) -> Dict[str, Any]:
+        """Format processed metric data into a standardized summary dictionary.
+
+        Args:
+            symbol: The ticker symbol (e.g., 'BTC').
+            current_price: The latest market price.
+            price_change: The pre-calculated percentage change.
+
+        Returns:
+            A dictionary containing formatted crypto tracking metrics.
+        """
+        return {
+            "symbol": symbol.upper(),
+            "price": f"{current_price:.2f} {self.base_currency}",
+            "change_percent": f"{price_change:+.2f}%",
+            "is_volatile": self.is_highly_volatile(price_change)
+        }

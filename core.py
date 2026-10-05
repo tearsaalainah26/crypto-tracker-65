@@ -1,23 +1,31 @@
-from typing import Dict, List, Optional
+import functools
+from typing import Dict, Any
+from collections import deque
 
-def format_price(price: float, symbol: str) -> str:
-    """Formats crypto price with currency symbol and precision."""
-    if price < 1.0:
-        return f"{symbol}{price:.6f}"
-    return f"{symbol}{price:,.2f}"
+# Cache depth for frequent ticker updates
+CACHE_SIZE = 128
 
-def calculate_portfolio_value(holdings: Dict[str, float], prices: Dict[str, float]) -> float:
-    """Calculates total value of portfolio based on current market prices."""
-    total = 0.0
-    for asset, amount in holdings.items():
-        price = prices.get(asset, 0.0)
-        total += amount * price
-    return total
+class DataProcessor:
+    """Core processing engine with memoization for high-frequency data."""
+    
+    def __init__(self):
+        self._history = deque(maxlen=CACHE_SIZE)
 
-def filter_by_threshold(assets: List[Dict], threshold: float) -> List[Dict]:
-    """Filters assets that meet a minimum value requirement."""
-    return [item for item in assets if item.get('price', 0) >= threshold]
+    @functools.lru_cache(maxsize=CACHE_SIZE)
+    def normalize_price(self, pair: str, price: float) -> float:
+        """Standardize float precision for crypto market pairs."""
+        return round(float(price), 8)
 
-def normalize_asset_name(name: str) -> str:
-    """Converts asset symbols to uppercase for standardized lookups."""
-    return name.strip().upper()
+    def batch_process_rates(self, data: Dict[str, float]) -> Dict[str, float]:
+        """Optimization via cached normalization calls."""
+        return {
+            pair: self.normalize_price(pair, rate)
+            for pair, rate in data.items()
+        }
+
+    def get_latest_snapshot(self) -> list:
+        """Retrieve processed data cache state."""
+        return list(self._history)
+
+# Singleton instance for core engine
+engine = DataProcessor()

@@ -1,54 +1,52 @@
-import json
 import os
-from pathlib import Path
+import json
 from typing import Any, Dict
 
-DEFAULT_CONFIG: Dict[str, Any] = {
-    "api_provider": "coingecko",
-    "api_key": "",
-    "base_currency": "usd",
-    "update_interval": 60,
-    "request_timeout": 10,
-    "tracked_symbols": ["btc", "eth", "sol"],
-    "enable_alerts": True,
-    "price_alert_threshold_pct": 5.0,
+DEFAULT_CONFIG = {
+    "COIN_GECKO_API_KEY": "",
+    "UPDATE_INTERVAL_SECONDS": 60,
+    "TRACKED_COINS": ["bitcoin", "ethereum", "solana"],
+    "VS_CURRENCY": "usd",
+    "LOG_LEVEL": "INFO"
 }
 
-
 class Config:
-    """Manages application settings with defaults and environment overrides."""
-
-    def __init__(self, config_path: str = "config.json"):
-        self.filepath = Path(config_path)
-        self._settings = DEFAULT_CONFIG.copy()
+    """Manages configuration loaded from files and environment variables for the crypto tracker."""
+    
+    def __init__(self, config_filepath: str = "config.json"):
+        self.filepath = config_filepath
+        self.settings: Dict[str, Any] = DEFAULT_CONFIG.copy()
         self.load()
 
     def load(self) -> None:
-        """Loads settings from JSON file if present and overrides with env vars."""
-        if self.filepath.exists():
+        """Loads configuration settings, preferring environment variables over JSON file."""
+        # Load default settings from local json configuration if present
+        if os.path.exists(self.filepath):
             try:
                 with open(self.filepath, "r", encoding="utf-8") as f:
                     file_settings = json.load(f)
-                    self._settings.update(file_settings)
-            except (json.JSONDecodeError, OSError) as err:
-                print(f"Warning: Failed to parse {self.filepath}, using defaults: {err}")
+                    self.settings.update(file_settings)
+            except (json.JSONDecodeError, OSError):
+                # Suppress error and fallback to hardcoded default values
+                pass
 
-        # Override dynamic or sensitive parameters from environment variables
-        if env_api_key := os.getenv("CRYPTO_API_KEY"):
-            self._settings["api_key"] = env_api_key
-        if env_currency := os.getenv("CRYPTO_BASE_CURRENCY"):
-            self._settings["base_currency"] = env_currency.lower()
+        # Override settings if environment variables are defined
+        for key, default_val in DEFAULT_CONFIG.items():
+            env_val = os.getenv(key)
+            if env_val is not None:
+                if isinstance(default_val, int):
+                    try:
+                        self.settings[key] = int(env_val)
+                    except ValueError:
+                        pass
+                elif isinstance(default_val, list):
+                    try:
+                        self.settings[key] = [item.strip() for item in env_val.split(",")]
+                    except Exception:
+                        pass
+                else:
+                    self.settings[key] = env_val
 
-    def get(self, key: str, default: Any = None) -> Any:
-        """Retrieve a configuration value by key."""
-        return self._settings.get(key, default)
-
-    def __getitem__(self, item: str) -> Any:
-        return self._settings[item]
-
-    def as_dict(self) -> Dict[str, Any]:
-        """Return copy of active configuration dictionary."""
-        return self._settings.copy()
-
-
-config = Config()
+    def get(self, key: str) -> Any:
+        """Retrieves config value by key falling back to default if absent."""
+        return self.settings.get(key, DEFAULT_CONFIG.get(key))

@@ -1,32 +1,23 @@
-import logging
 from typing import Dict, List, Optional
 
-# Configure logging for crypto-tracker-65
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('crypto-tracker-65')
+def format_price(price: float, symbol: str) -> str:
+    """Formats crypto price with currency symbol and precision."""
+    if price < 1.0:
+        return f"{symbol}{price:.6f}"
+    return f"{symbol}{price:,.2f}"
 
-class CryptoTracker:
-    def __init__(self, assets: List[str]):
-        self.assets = assets
-        self.prices: Dict[str, float] = {}
+def calculate_portfolio_value(holdings: Dict[str, float], prices: Dict[str, float]) -> float:
+    """Calculates total value of portfolio based on current market prices."""
+    total = 0.0
+    for asset, amount in holdings.items():
+        price = prices.get(asset, 0.0)
+        total += amount * price
+    return total
 
-    def update_prices(self, provider_data: Dict[str, float]) -> None:
-        """Synchronizes tracker state with new price data."""
-        for asset in self.assets:
-            price = provider_data.get(asset)
-            if price is not None:
-                self.prices[asset] = price
-        logger.info(f"Updated {len(self.prices)} assets")
+def filter_by_threshold(assets: List[Dict], threshold: float) -> List[Dict]:
+    """Filters assets that meet a minimum value requirement."""
+    return [item for item in assets if item.get('price', 0) >= threshold]
 
-    def get_summary(self) -> str:
-        """Formats asset prices for notification."""
-        return ", ".join([f"{k}: ${v:.2f}" for k, v in self.prices.items()])
-
-    def validate_input(self, data: Dict) -> bool:
-        """Ensures incoming price payload contains required fields."""
-        return all(asset in data for asset in self.assets)
-
-def initialize_tracker(assets: List[str]) -> CryptoTracker:
-    """Factory method for core tracker component."""
-    logger.info("Initializing core crypto tracker")
-    return CryptoTracker(assets=assets)
+def normalize_asset_name(name: str) -> str:
+    """Converts asset symbols to uppercase for standardized lookups."""
+    return name.strip().upper()

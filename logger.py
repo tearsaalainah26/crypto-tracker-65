@@ -1,55 +1,39 @@
-import os
 import logging
 from logging.handlers import RotatingFileHandler
+import os
 
-DEFAULT_LOG_DIR = "logs"
-DEFAULT_LOG_FILE = "crypto_tracker.log"
-MAX_LOG_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB per log file
-BACKUP_COUNT = 5  # Keep 5 historical log files
+LOG_DIR = 'logs'
+LOG_FILE = os.path.join(LOG_DIR, 'crypto_tracker.log')
+MAX_BYTES = 5 * 1024 * 1024  # 5MB
+BACKUP_COUNT = 3
 
+def setup_logger(name: str) -> logging.Logger:
+    """Configures a rotating file logger for crypto-tracker-65."""
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
 
-def setup_logger(
-    name: str = "crypto_tracker",
-    log_file: str = DEFAULT_LOG_FILE,
-    level: int = logging.INFO,
-    max_bytes: int = MAX_LOG_SIZE_BYTES,
-    backup_count: int = BACKUP_COUNT,
-) -> logging.Logger:
-    """Configures and returns a logger instance with console and rotating file handlers."""
     logger = logging.getLogger(name)
-    logger.setLevel(level)
+    logger.setLevel(logging.INFO)
 
-    # Prevent duplicate handlers if the logger is re-initialized
-    if logger.handlers:
-        return logger
+    # Prevent duplicate handlers if setup is called multiple times
+    if not logger.handlers:
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
 
-    # Ensure target directory exists
-    os.makedirs(DEFAULT_LOG_DIR, exist_ok=True)
-    log_path = os.path.join(DEFAULT_LOG_DIR, log_file)
+        # Rotating file handler configuration
+        file_handler = RotatingFileHandler(
+            LOG_FILE, 
+            maxBytes=MAX_BYTES, 
+            backupCount=BACKUP_COUNT
+        )
+        file_handler.setFormatter(formatter)
 
-    # Standardized format for tracking crypto engine operations
-    log_format = logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+        # Console output for debugging
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
 
-    # Console handler for real-time stdout output
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(log_format)
-    logger.addHandler(console_handler)
-
-    # Rotating file handler to manage log size
-    file_handler = RotatingFileHandler(
-        log_path,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(log_format)
-    logger.addHandler(file_handler)
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
 
     return logger
-
-
-# Pre-configured instance for quick usage across crypto modules
-tracker_logger = setup_logger()

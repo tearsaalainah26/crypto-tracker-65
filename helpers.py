@@ -1,37 +1,28 @@
-import functools
-import time
-from typing import Callable, Any, Dict
+from typing import Union, List
 
-# Cache for crypto price calculations to reduce API load
-_price_cache: Dict[str, tuple[float, float]] = {}
-CACHE_EXPIRY = 60  # seconds
+def format_price(value: Union[int, float], currency: str = "USD") -> str:
+    """Formats a numeric price value into a human-readable currency string."""
+    if value is None:
+        return "$0.00"
+    
+    # Display more decimals for low-value micro-cap tokens
+    if value < 0.01:
+        return f"{value:.8f} {currency.upper()}"
+    if value < 1.0:
+        return f"{value:.4f} {currency.upper()}"
+    return f"${value:,.2f} {currency.upper()}"
 
-def memoize_price_calculation(func: Callable) -> Callable:
-    """Decorator to cache result of expensive crypto math."""
-    @functools.wraps(func)
-    def wrapper(symbol: str, *args, **kwargs) -> Any:
-        current_time = time.time()
-        if symbol in _price_cache:
-            val, timestamp = _price_cache[symbol]
-            if current_time - timestamp < CACHE_EXPIRY:
-                return val
-        
-        result = func(symbol, *args, **kwargs)
-        _price_cache[symbol] = (result, current_time)
-        return result
-    return wrapper
-
-@memoize_price_calculation
-def calculate_volatility(symbol: str, price_history: list[float]) -> float:
-    """Calculates simple variance for price history."""
-    if not price_history:
+def calculate_percentage_change(old_price: float, new_price: float) -> float:
+    """Calculates the percentage change between two price points safely."""
+    if not old_price or old_price == 0:
         return 0.0
-    mean = sum(price_history) / len(price_history)
-    variance = sum((x - mean) ** 2 for x in price_history) / len(price_history)
-    return float(variance ** 0.5)
+    return round(((new_price - old_price) / old_price) * 100.0, 2)
 
-def clear_stale_cache() -> None:
-    """Cleanup function to free memory."""
-    global _price_cache
-    _price_cache = {k: v for k, v in _price_cache.items() 
-                    if time.time() - v[1] < CACHE_EXPIRY}
+def meets_volatility_threshold(old_price: float, new_price: float, threshold: float) -> bool:
+    """Determines if the absolute price change percentage exceeds a threshold."""
+    change = calculate_percentage_change(old_price, new_price)
+    return abs(change) >= threshold
+
+def chunk_symbols(symbols: List[str], batch_size: int = 50) -> List[List[str]]:
+    """Chunks a list of symbols to prevent hitting URI limit on batch requests."""
+    return [symbols[i:i + batch_size] for i in range(0, len(symbols), batch_size)]

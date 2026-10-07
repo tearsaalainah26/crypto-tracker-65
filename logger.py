@@ -1,35 +1,36 @@
 import logging
-from logging.handlers import RotatingFileHandler
 import os
+from logging.handlers import RotatingFileHandler
 
-LOG_FILE = "crypto_tracker.log"
-MAX_BYTES = 5 * 1024 * 1024
-BACKUP_COUNT = 3
-
-def setup_logger(name: str) -> logging.Logger:
-    """Configures a rotating file logger for the tracker."""
+def setup_logger(name='crypto-tracker-65', log_file='tracker.log', level=logging.INFO):
+    """Initializes a rotating file logger for system operations."""
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)
 
-    # Prevent duplicate handlers if logger is re-initialized
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+    # Prevent duplicate handlers if re-initialized
+    if logger.hasHandlers():
+        logger.handlers.clear()
 
-        # Rotating file handler configuration
-        file_handler = RotatingFileHandler(
-            LOG_FILE, 
-            maxBytes=MAX_BYTES, 
-            backupCount=BACKUP_COUNT
-        )
-        file_handler.setFormatter(formatter)
-        
-        # Stream handler for console output
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(formatter)
+    # Setup rotation: 5MB max per file, keep 3 backups
+    handler = RotatingFileHandler(
+        log_file, 
+        maxBytes=5 * 1024 * 1024, 
+        backupCount=3
+    )
 
-        logger.addHandler(file_handler)
-        logger.addHandler(stream_handler)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    handler.setFormatter(formatter)
+    
+    logger.addHandler(handler)
+    
+    # Stream handler for console output
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    logger.addHandler(console)
 
     return logger
+
+# Instantiate core application logger
+logger = setup_logger()

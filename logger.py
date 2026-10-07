@@ -2,34 +2,34 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 
-def setup_logger(name='crypto-tracker', log_file='tracker.log', level=logging.INFO):
-    """Initializes a rotating file logger for crypto-tracker-65."""
+LOG_FILE = "crypto_tracker.log"
+MAX_BYTES = 5 * 1024 * 1024
+BACKUP_COUNT = 3
+
+def setup_logger(name: str) -> logging.Logger:
+    """Configures a rotating file logger for the tracker."""
     logger = logging.getLogger(name)
-    logger.setLevel(level)
+    logger.setLevel(logging.INFO)
 
-    # Prevent duplicate handlers if re-initialized
+    # Prevent duplicate handlers if logger is re-initialized
     if not logger.handlers:
-        # Ensure logs directory exists
-        log_dir = os.path.dirname(log_file)
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-
-        # Rotation: 5MB per file, max 3 backups
-        handler = RotatingFileHandler(
-            log_file, 
-            maxBytes=5*1024*1024, 
-            backupCount=3
-        )
-        
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+
+        # Rotating file handler configuration
+        file_handler = RotatingFileHandler(
+            LOG_FILE, 
+            maxBytes=MAX_BYTES, 
+            backupCount=BACKUP_COUNT
+        )
+        file_handler.setFormatter(formatter)
         
-        # Add console output
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+        # Stream handler for console output
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+
+        logger.addHandler(file_handler)
+        logger.addHandler(stream_handler)
 
     return logger

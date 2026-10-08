@@ -1,32 +1,29 @@
 import re
 
-class CryptoValidator:
-    """Input validation logic for crypto-tracker-65 inputs."""
+# crypto-tracker-65 input validation utilities
 
-    SYMBOL_PATTERN = re.compile(r'^[A-Z0-9]{2,10}$')
+def validate_symbol(symbol: str) -> bool:
+    """verify crypto ticker format (e.g., BTC, ETH, SOL)."""
+    if not isinstance(symbol, str):
+        return False
+    return bool(re.match(r"^[A-Z0-9]{2,10}$", symbol))
 
-    @staticmethod
-    def validate_ticker(ticker: str) -> bool:
-        """Verify ticker symbol matches expected format."""
-        if not isinstance(ticker, str):
-            return False
-        return bool(CryptoValidator.SYMBOL_PATTERN.match(ticker.strip().upper()))
+def validate_amount(amount: str) -> bool:
+    """ensure amount is a positive numeric string."""
+    try:
+        val = float(amount)
+        return val > 0
+    except (ValueError, TypeError):
+        return False
 
-    @staticmethod
-    def validate_amount(amount: float) -> bool:
-        """Ensure investment amount is positive."""
-        try:
-            value = float(amount)
-            return value > 0
-        except (ValueError, TypeError):
-            return False
-
-def process_input(ticker: str, amount: float):
-    """Main loop entry for input validation."""
-    if not CryptoValidator.validate_ticker(ticker):
-        raise ValueError(f"Invalid ticker format: {ticker}")
+def process_input(raw_symbol: str, raw_amount: str):
+    """main validation gate for user inputs."""
+    symbol = raw_symbol.upper().strip()
     
-    if not CryptoValidator.validate_amount(amount):
-        raise ValueError(f"Invalid amount: {amount}. Must be positive.")
-    
-    return True
+    if not validate_symbol(symbol):
+        raise ValueError(f"Invalid ticker symbol: {raw_symbol}")
+        
+    if not validate_amount(raw_amount):
+        raise ValueError(f"Invalid amount: {raw_amount}")
+        
+    return symbol, float(raw_amount)

@@ -1,39 +1,45 @@
-import functools
-import time
-from typing import Any, Callable, Dict
+import re
+from typing import Any, Dict
 
-# Cache for crypto price calculations
-_price_cache: Dict[str, Any] = {}
-_cache_expiry: Dict[str, float] = {}
-CACHE_TTL = 30  # seconds
 
-def memoize_crypto_data(func: Callable) -> Callable:
-    """Decorator for caching ticker calculations to reduce CPU load."""
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> Any:
-        key = str(args) + str(kwargs)
-        now = time.time()
+def validate_symbol(symbol: str) -> str:
+    """Validate and normalize a cryptocurrency trading pair symbol."""
+    if not isinstance(symbol, str):
+        raise ValueError("Symbol must be a string")
+    cleaned = symbol.strip().upper()
+    pattern = r"^[A-Z0-9]{2,10}(?:[/\-_][A-Z0-9]{2,10})?$"
+    if not re.match(pattern, cleaned):
+        raise ValueError(f"Invalid crypto symbol format: '{symbol}'")
+    return cleaned
 
-        if key in _price_cache and (now - _cache_expiry.get(key, 0)) < CACHE_TTL:
-            return _price_cache[key]
 
-        result = func(*args, **kwargs)
-        _price_cache[key] = result
-        _cache_expiry[key] = now
-        return result
+def validate_numeric_value(val: Any, field_name: str, allow_zero: bool = False) -> float:
+    """Validate and convert numeric input values like price or volume."""
+    try:
+        num = float(val)
+    except (TypeError, ValueError):
+        raise ValueError(f"Field '{field_name}' must be a valid number, got '{val}'")
+    
+    if allow_zero and num < 0:
+        raise ValueError(f"Field '{field_name}' cannot be negative")
+    elif not allow_zero and num <= 0:
+        raise ValueError(f"Field '{field_name}' must be greater than zero")
+    return num
 
-    return wrapper
 
-def batch_process_prices(price_list: list) -> list:
-    """Vectorized-style approach for list transformation optimization."""
-    # Minimize object creation overhead in processing loops
-    return [p * 1.0001 for p in price_list if p > 0]
+def validate_crypto_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate raw incoming market data payload before processing."""
+    if not isinstance(payload, dict):
+        raise ValueError("Input payload must be a dictionary")
 
-# Helper for clearing stale cache entries
-def clear_stale_cache() -> None:
-    """Cleanup of expired cache entries."""
-    now = time.time()
-    expired = [k for k, t in _cache_expiry.items() if (now - t) > CACHE_TTL]
-    for key in expired:
-        _price_cache.pop(key, None)
-        _cache_expiry.pop(key, None)
+    required_keys = ["symbol", "price", "volume"]
+    missing = [key for key in required_keys if key not in payload]
+    if missing:
+        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+
+    return {
+        "symbol": validate_symbol(payload["symbol"]),
+        "price": validate_numeric_value(payload["price"], "price", allow_zero=False),
+        "volume": validate_numeric_value(payload["volume"], "volume", allow_zero=True),
+        "timestamp": payload.get("timestamp"),
+    }

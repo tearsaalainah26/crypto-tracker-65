@@ -1,35 +1,52 @@
-import time
-import requests
 import logging
-from typing import Callable, Any
+from typing import Dict, Any, Optional
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("crypto_tracker.processor")
 
-class NetworkProcessor:
-    """Handles resilient network operations for crypto-tracker-65."""
+class ProcessingError(Exception):
+    """Custom exception for crypto data processing errors."""
+    pass
 
-    def __init__(self, max_retries: int = 3, delay: float = 2.0):
-        self.max_retries = max_retries
-        self.delay = delay
+class CryptoDataProcessor:
+    """Processes raw cryptocurrency market data with robust edge-case handling."""
 
-    def execute_with_retry(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
-        """Executes a network function with exponential backoff."""
-        last_exception = None
-        
-        for attempt in range(self.max_retries):
-            try:
-                return func(*args, **kwargs)
-            except (requests.exceptions.RequestException, ConnectionError) as e:
-                last_exception = e
-                wait_time = self.delay * (2 ** attempt)
-                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-        
-        logger.error("Max retries reached for network operation.")
-        raise last_exception
+    def __init__(self, decimal_places: int = 2):
+        self.decimal_places = decimal_places
 
-def fetch_market_data(url: str):
-    """Example request handler for crypto data."""
-    response = requests.get(url, timeout=10)
-    response.raise_for_status()
-    return response.json()
+    def calculate_price_change(self, current_price: float, previous_price: float) -> float:
+        """Calculates percentage change, handling division by zero and negative values."""
+        if previous_price <= 0:
+            logger.warning(f"Invalid previous price {previous_price} for change calculation. Defaulting to 0.0.")
+            return 0.0
+        if current_price < 0:
+            logger.warning(f"Negative current price {current_price} encountered. Defaulting to 0.0.")
+            current_price = 0.0
+            
+        change = ((current_price - previous_price) / previous_price) * 100
+        return round(change, self.decimal_places)
+
+    def process_ticker_payload(self, payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Parses raw ticker payload, gracefully handling missing keys or bad types."""
+        if not payload:
+            raise ProcessingError("Payload is empty or None")
+
+        symbol = payload.get("symbol")
+        if not isinstance(symbol, str) or not symbol.strip():
+            raise ProcessingError("Missing or invalid symbol in ticker payload")
+
+        try:
+            current_price = float(payload.get("price", 0.0))
+            previous_price = float(payload.get("prev_price", 0.0))
+            volume = float(payload.get("volume24h", 0.0))
+        except (ValueError, TypeError) as err:
+            raise ProcessingError(f"Malformed numeric values in payload: {err}")
+
+        price_change_pct = self.calculate_price_change(current_price, previous_price)
+
+        return {
+            "symbol": symbol.strip().upper(),
+            "price": max(0.0, current_price),
+            "price_change_pct": price_change_pct,
+            "volume_positive": volume > 0,
+            "volume": max(0.0, volume)
+        }

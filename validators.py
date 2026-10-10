@@ -1,29 +1,26 @@
 import re
+from typing import Optional
 
-# crypto-tracker-65 input validation utilities
+# regex patterns for crypto validation
+SYMBOL_PATTERN = re.compile(r'^[A-Z0-9]{2,10}$')
+ADDRESS_PATTERN = re.compile(r'^[a-zA-Z0-9]{26,42}$')
 
 def validate_symbol(symbol: str) -> bool:
-    """verify crypto ticker format (e.g., BTC, ETH, SOL)."""
-    if not isinstance(symbol, str):
-        return False
-    return bool(re.match(r"^[A-Z0-9]{2,10}$", symbol))
+    """verify crypto ticker format"""
+    return bool(SYMBOL_PATTERN.match(symbol.upper()))
 
-def validate_amount(amount: str) -> bool:
-    """ensure amount is a positive numeric string."""
-    try:
-        val = float(amount)
-        return val > 0
-    except (ValueError, TypeError):
+def validate_address(address: str, chain: str = 'eth') -> bool:
+    """check crypto wallet address integrity"""
+    if not address or len(address) < 20:
         return False
+    return bool(ADDRESS_PATTERN.match(address))
 
-def process_input(raw_symbol: str, raw_amount: str):
-    """main validation gate for user inputs."""
-    symbol = raw_symbol.upper().strip()
-    
-    if not validate_symbol(symbol):
-        raise ValueError(f"Invalid ticker symbol: {raw_symbol}")
-        
-    if not validate_amount(raw_amount):
-        raise ValueError(f"Invalid amount: {raw_amount}")
-        
-    return symbol, float(raw_amount)
+def sanitize_input(user_input: Optional[str]) -> str:
+    """strip whitespace and force uppercase"""
+    if not user_input:
+        return ""
+    return user_input.strip().upper()
+
+class ValidationError(Exception):
+    """custom exception for validation failures"""
+    pass

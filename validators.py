@@ -1,26 +1,21 @@
 import re
-from typing import Optional
 
-# regex patterns for crypto validation
-SYMBOL_PATTERN = re.compile(r'^[A-Z0-9]{2,10}$')
-ADDRESS_PATTERN = re.compile(r'^[a-zA-Z0-9]{26,42}$')
+# crypto-tracker-65 input validation rules
+VALID_TICKER_PATTERN = re.compile(r'^[A-Z0-9]{2,10}$')
+MAX_API_LIMIT = 100
 
-def validate_symbol(symbol: str) -> bool:
-    """verify crypto ticker format"""
-    return bool(SYMBOL_PATTERN.match(symbol.upper()))
-
-def validate_address(address: str, chain: str = 'eth') -> bool:
-    """check crypto wallet address integrity"""
-    if not address or len(address) < 20:
+def validate_ticker(ticker: str) -> bool:
+    """verify crypto ticker format requirements."""
+    if not isinstance(ticker, str):
         return False
-    return bool(ADDRESS_PATTERN.match(address))
+    return bool(VALID_TICKER_PATTERN.match(ticker.upper()))
 
-def sanitize_input(user_input: Optional[str]) -> str:
-    """strip whitespace and force uppercase"""
-    if not user_input:
-        return ""
-    return user_input.strip().upper()
+def validate_limit(limit: int) -> bool:
+    """ensure api fetch limits remain reasonable."""
+    if not isinstance(limit, int):
+        return False
+    return 1 <= limit <= MAX_API_LIMIT
 
-class ValidationError(Exception):
-    """custom exception for validation failures"""
-    pass
+def sanitize_input(user_input: str) -> str:
+    """strip whitespace and convert to upper case."""
+    return str(user_input).strip().upper()

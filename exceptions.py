@@ -1,30 +1,29 @@
-import time
-import logging
-import functools
-from typing import Callable, Any
+class CryptoTrackerError(Exception):
+    """Base exception for the crypto-tracker-65 application."""
+    pass
 
-logger = logging.getLogger(__name__)
+class APIConnectionError(CryptoTrackerError):
+    """Raised when external crypto APIs are unreachable."""
+    pass
 
-def retry_on_failure(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
-    """Decorator for retrying network operations with exponential backoff."""
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            current_retries = 0
-            current_delay = delay
-            
-            while current_retries < retries:
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError, Exception) as e:
-                    current_retries += 1
-                    if current_retries >= retries:
-                        logger.error(f"Final attempt failed for {func.__name__}: {e}")
-                        raise
-                    
-                    logger.warning(f"Retry {current_retries}/{retries} for {func.__name__} after error: {e}")
-                    time.sleep(current_delay)
-                    current_delay *= backoff
-            return None
-        return wrapper
-    return decorator
+class RateLimitExceeded(CryptoTrackerError):
+    """Raised when hitting API rate limits."""
+    pass
+
+class DataValidationError(CryptoTrackerError):
+    """Raised when parsed crypto data is malformed."""
+    pass
+
+class ConfigurationError(CryptoTrackerError):
+    """Raised when environment variables or config files are missing."""
+    pass
+
+def handle_crypto_exception(e: Exception) -> str:
+    """Centralized error mapping for logging and UI feedback."""
+    if isinstance(e, APIConnectionError):
+        return "Network issue: unable to reach crypto exchange."
+    if isinstance(e, RateLimitExceeded):
+        return "Rate limit hit: please wait before next request."
+    if isinstance(e, DataValidationError):
+        return "Data error: received invalid format from source."
+    return f"Unexpected application error: {str(e)}"

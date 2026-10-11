@@ -1,31 +1,63 @@
-import functools
-from typing import Dict, Any
-from collections import deque
+import json
+import logging
+import time
+import urllib.error
+import urllib.request
+from typing import Any, Callable, Dict, Tuple, TypeVar
 
-# Cache depth for frequent ticker updates
-CACHE_SIZE = 128
+logger = logging.getLogger(__name__)
 
-class DataProcessor:
-    """Core processing engine with memoization for high-frequency data."""
-    
-    def __init__(self):
-        self._history = deque(maxlen=CACHE_SIZE)
+F = TypeVar("F", bound=Callable[..., Any])
 
-    @functools.lru_cache(maxsize=CACHE_SIZE)
-    def normalize_price(self, pair: str, price: float) -> float:
-        """Standardize float precision for crypto market pairs."""
-        return round(float(price), 8)
 
-    def batch_process_rates(self, data: Dict[str, float]) -> Dict[str, float]:
-        """Optimization via cached normalization calls."""
-        return {
-            pair: self.normalize_price(pair, rate)
-            for pair, rate in data.items()
-        }
+def retry_network_call(
+    max_retries: int = 3,
+    backoff_factor: float = 1.5,
+    exceptions: Tuple[type, ...] = (urllib.error.URLError, TimeoutError, OSError),
+) -> Callable[[F], F]:
+    """Decorator that retries network operations with exponential backoff."""
+    def decorator(func: F) -> F:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            attempt = 0
+            delay = 1.0
+            while True:
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as err:
+                    attempt += 1
+                    if attempt >= max_retries:
+                        logger.error("Operation %s failed after %d attempts: %s", func.__name__, max_retries, err)
+                        raise
+                    
+                    logger.warning(
+                        "Network attempt %d/%d failed for %s: %s. Retrying in %.1fs...",
+                        attempt,
+                        max_retries,
+                        func.__name__,
+                        err,
+                        delay,
+                    )
+                    time.sleep(delay)
+                    delay *= backoff_factor
+        return wrapper  # type: ignore
+    return decorator
 
-    def get_latest_snapshot(self) -> list:
-        """Retrieve processed data cache state."""
-        return list(self._history)
 
-# Singleton instance for core engine
-engine = DataProcessor()
+class CryptoTrackerCore:
+    """Core client for handling crypto asset price requests."""
+
+    def __init__(self, base_url: str = "https://api.coingecko.com/api/v3") -> None:
+        self.base_url = base_url.rstrip("/")
+
+    @retry_network_call(max_retries=3, backoff_factor=2.0)
+    def get_spot_price(self, coin_id: str, currency: str = "usd") -> Dict[str, Any]:
+        """Fetch current spot price for a cryptocurrency asset."""
+        endpoint = f"{self.base_url}/simple/price?ids={coin_id}&vs_currencies={currency}"
+        request = urllib.request.Request(
+            endpoint,
+            headers={"User-Agent": "CryptoTracker/1.0"}
+        )
+        
+        with urllib.request.urlopen(request, timeout=5) as response:
+            data = response.read().decode("utf-8")
+            return json.loads(data)

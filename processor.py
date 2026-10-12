@@ -1,52 +1,51 @@
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, List
 
-logger = logging.getLogger("crypto_tracker.processor")
+logger = logging.getLogger(__name__)
+
 
 class ProcessingError(Exception):
-    """Custom exception for crypto data processing errors."""
+    """Raised when payload validation or processing fails."""
     pass
 
-class CryptoDataProcessor:
-    """Processes raw cryptocurrency market data with robust edge-case handling."""
 
-    def __init__(self, decimal_places: int = 2):
-        self.decimal_places = decimal_places
+def validate_crypto_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate incoming cryptocurrency tracking payload."""
+    if not isinstance(data, dict):
+        raise ProcessingError("Payload must be a dictionary")
 
-    def calculate_price_change(self, current_price: float, previous_price: float) -> float:
-        """Calculates percentage change, handling division by zero and negative values."""
-        if previous_price <= 0:
-            logger.warning(f"Invalid previous price {previous_price} for change calculation. Defaulting to 0.0.")
-            return 0.0
-        if current_price < 0:
-            logger.warning(f"Negative current price {current_price} encountered. Defaulting to 0.0.")
-            current_price = 0.0
-            
-        change = ((current_price - previous_price) / previous_price) * 100
-        return round(change, self.decimal_places)
+    symbol = data.get("symbol")
+    if not symbol or not isinstance(symbol, str) or len(symbol) > 10:
+        raise ProcessingError("Invalid or missing 'symbol' field")
 
-    def process_ticker_payload(self, payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        """Parses raw ticker payload, gracefully handling missing keys or bad types."""
-        if not payload:
-            raise ProcessingError("Payload is empty or None")
+    price = data.get("price")
+    if price is None or not isinstance(price, (int, float)) or price < 0:
+        raise ProcessingError("Invalid or missing 'price' value")
 
-        symbol = payload.get("symbol")
-        if not isinstance(symbol, str) or not symbol.strip():
-            raise ProcessingError("Missing or invalid symbol in ticker payload")
+    volume = data.get("volume", 0.0)
+    if not isinstance(volume, (int, float)) or volume < 0:
+        raise ProcessingError("Invalid 'volume' value")
 
+    return {
+        "symbol": symbol.upper().strip(),
+        "price": float(price),
+        "volume": float(volume),
+        "timestamp": data.get("timestamp")
+    }
+
+
+def process_incoming_queue(raw_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Process a batch of crypto data payloads with input validation."""
+    valid_records = []
+
+    for idx, item in enumerate(raw_items):
         try:
-            current_price = float(payload.get("price", 0.0))
-            previous_price = float(payload.get("prev_price", 0.0))
-            volume = float(payload.get("volume24h", 0.0))
-        except (ValueError, TypeError) as err:
-            raise ProcessingError(f"Malformed numeric values in payload: {err}")
+            cleaned_data = validate_crypto_payload(item)
+            valid_records.append(cleaned_data)
+            logger.debug(f"Successfully validated item {idx}: {cleaned_data['symbol']}")
+        except ProcessingError as err:
+            logger.warning(f"Skipping invalid item at index {idx}: {err}")
+        except Exception as err:
+            logger.error(f"Unexpected error validating item {idx}: {err}")
 
-        price_change_pct = self.calculate_price_change(current_price, previous_price)
-
-        return {
-            "symbol": symbol.strip().upper(),
-            "price": max(0.0, current_price),
-            "price_change_pct": price_change_pct,
-            "volume_positive": volume > 0,
-            "volume": max(0.0, volume)
-        }
+    return valid_records

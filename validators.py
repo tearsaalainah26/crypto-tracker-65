@@ -1,26 +1,44 @@
-import functools
-from typing import Dict, Any, Optional
+import re
 
-# Cache asset validation results to reduce repetitive API overhead
-# in crypto-tracker-65 core validation cycles.
-@functools.lru_cache(maxsize=128)
-def is_valid_asset(symbol: str) -> bool:
-    """Performs basic sanity check on ticker symbols."""
-    if not isinstance(symbol, str) or len(symbol) < 2 or len(symbol) > 10:
-        return False
-    return symbol.isupper()
+class InputValidator:
+    """Validator for cryptocurrency tracking input parameters."""
 
-def batch_validate_assets(assets: list) -> Dict[str, bool]:
-    """Bulk check assets with memoized validation logic."""
-    return {asset: is_valid_asset(asset) for asset in assets}
+    # Regex for common crypto symbols (2-5 uppercase chars)
+    SYMBOL_PATTERN = re.compile(r'^[A-Z]{2,5}$')
 
-def normalize_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Standardizes incoming market data payloads."""
-    if not data or 'ticker' not in data:
-        return {}
+    @staticmethod
+    def validate_ticker(ticker: str) -> bool:
+        """Verify if the ticker format is acceptable."""
+        return bool(InputValidator.SYMBOL_PATTERN.match(ticker.upper()))
+
+    @staticmethod
+    def validate_amount(amount: float) -> bool:
+        """Ensure the trade amount is a positive number."""
+        try:
+            val = float(amount)
+            return val > 0
+        except (ValueError, TypeError):
+            return False
+
+    @staticmethod
+    def validate_fiat(currency: str) -> bool:
+        """Check if fiat code is standard 3-letter format."""
+        return isinstance(currency, str) and len(currency) == 3
+
+def process_input(data: dict):
+    """Main validation routine for crypto trade data."""
+    required = ['ticker', 'amount', 'fiat']
     
-    return {
-        "ticker": str(data['ticker']).upper(),
-        "price": float(data.get('price', 0.0)),
-        "volume": float(data.get('volume', 0.0))
-    }
+    # Ensure all keys exist
+    if not all(k in data for k in required):
+        return False
+
+    # Run individual field checks
+    if not InputValidator.validate_ticker(data['ticker']):
+        return False
+    if not InputValidator.validate_amount(data['amount']):
+        return False
+    if not InputValidator.validate_fiat(data['fiat']):
+        return False
+
+    return True

@@ -1,21 +1,26 @@
-import re
+import functools
+from typing import Dict, Any, Optional
 
-# crypto-tracker-65 input validation rules
-VALID_TICKER_PATTERN = re.compile(r'^[A-Z0-9]{2,10}$')
-MAX_API_LIMIT = 100
-
-def validate_ticker(ticker: str) -> bool:
-    """verify crypto ticker format requirements."""
-    if not isinstance(ticker, str):
+# Cache asset validation results to reduce repetitive API overhead
+# in crypto-tracker-65 core validation cycles.
+@functools.lru_cache(maxsize=128)
+def is_valid_asset(symbol: str) -> bool:
+    """Performs basic sanity check on ticker symbols."""
+    if not isinstance(symbol, str) or len(symbol) < 2 or len(symbol) > 10:
         return False
-    return bool(VALID_TICKER_PATTERN.match(ticker.upper()))
+    return symbol.isupper()
 
-def validate_limit(limit: int) -> bool:
-    """ensure api fetch limits remain reasonable."""
-    if not isinstance(limit, int):
-        return False
-    return 1 <= limit <= MAX_API_LIMIT
+def batch_validate_assets(assets: list) -> Dict[str, bool]:
+    """Bulk check assets with memoized validation logic."""
+    return {asset: is_valid_asset(asset) for asset in assets}
 
-def sanitize_input(user_input: str) -> str:
-    """strip whitespace and convert to upper case."""
-    return str(user_input).strip().upper()
+def normalize_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Standardizes incoming market data payloads."""
+    if not data or 'ticker' not in data:
+        return {}
+    
+    return {
+        "ticker": str(data['ticker']).upper(),
+        "price": float(data.get('price', 0.0)),
+        "volume": float(data.get('volume', 0.0))
+    }

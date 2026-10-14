@@ -1,51 +1,53 @@
-import logging
-from typing import Any, Dict, List
-
-logger = logging.getLogger(__name__)
-
-
-class ProcessingError(Exception):
-    """Raised when payload validation or processing fails."""
-    pass
+from collections import deque
+from dataclasses import dataclass
+from typing import Dict, List
 
 
-def validate_crypto_payload(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate incoming cryptocurrency tracking payload."""
-    if not isinstance(data, dict):
-        raise ProcessingError("Payload must be a dictionary")
-
-    symbol = data.get("symbol")
-    if not symbol or not isinstance(symbol, str) or len(symbol) > 10:
-        raise ProcessingError("Invalid or missing 'symbol' field")
-
-    price = data.get("price")
-    if price is None or not isinstance(price, (int, float)) or price < 0:
-        raise ProcessingError("Invalid or missing 'price' value")
-
-    volume = data.get("volume", 0.0)
-    if not isinstance(volume, (int, float)) or volume < 0:
-        raise ProcessingError("Invalid 'volume' value")
-
-    return {
-        "symbol": symbol.upper().strip(),
-        "price": float(price),
-        "volume": float(volume),
-        "timestamp": data.get("timestamp")
-    }
+@dataclass(slots=True)
+class TradeTick:
+    symbol: str
+    price: float
+    volume: float
+    timestamp: float
 
 
-def process_incoming_queue(raw_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Process a batch of crypto data payloads with input validation."""
-    valid_records = []
+class BatchStreamProcessor:
+    """High-performance stream processor for cryptocurrency trade ticks."""
 
-    for idx, item in enumerate(raw_items):
-        try:
-            cleaned_data = validate_crypto_payload(item)
-            valid_records.append(cleaned_data)
-            logger.debug(f"Successfully validated item {idx}: {cleaned_data['symbol']}")
-        except ProcessingError as err:
-            logger.warning(f"Skipping invalid item at index {idx}: {err}")
-        except Exception as err:
-            logger.error(f"Unexpected error validating item {idx}: {err}")
+    def __init__(self, window_size: int = 1000):
+        self.window_size = window_size
+        self._buffers: Dict[str, deque] = {}
+        self._totals: Dict[str, Dict[str, float]] = {}
 
-    return valid_records
+    def process_tick(self, tick: TradeTick) -> Dict[str, float]:
+        """Process a single trade tick with O(1) rolling metrics update."""
+        symbol = tick.symbol
+        if symbol not in self._buffers:
+            self._buffers[symbol] = deque()
+            self._totals[symbol] = {"volume_price": 0.0, "total_volume": 0.0}
+
+        buffer = self._buffers[symbol]
+        totals = self._totals[symbol]
+
+        vol_price = tick.price * tick.volume
+        buffer.append((tick.price, tick.volume, vol_price))
+        totals["volume_price"] += vol_price
+        totals["total_volume"] += tick.volume
+
+        while len(buffer) > self.window_size:
+            _, old_vol, old_vol_price = buffer.popleft()
+            totals["volume_price"] -= old_vol_price
+            totals["total_volume"] -= old_vol
+
+        vwap = totals["volume_price"] / totals["total_volume"] if totals["total_volume"] > 0 else 0.0
+
+        return {
+            "symbol": symbol,
+            "vwap": round(vwap, 8),
+            "latest_price": tick.price,
+            "buffer_size": len(buffer)
+        }
+
+    def batch_process(self, ticks: List[TradeTick]) -> List[Dict[str, float]]:
+        """Process a batch of incoming ticks in memory."""
+        return [self.process_tick(tick) for tick in ticks]

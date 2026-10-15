@@ -1,30 +1,38 @@
 import logging
-import sys
-from pathlib import Path
+from logging.handlers import RotatingFileHandler
+import os
 
-# Configure logging directory and file path
-LOG_DIR = Path("logs")
-LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = LOG_DIR / "crypto_tracker.log"
-
-def get_logger(name: str) -> logging.Logger:
-    """Initializes and returns a configured logger instance."""
+def setup_logger(name='crypto_tracker', log_file='tracker.log', level=logging.INFO):
+    """
+    Configures a rotating file logger for tracking crypto operations.
+    Rotates files at 5MB, keeps 3 backups.
+    """
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)
 
-    # Prevent duplicate handlers if logger is re-initialized
     if not logger.handlers:
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        # Ensure log directory exists
+        log_dir = os.path.dirname(log_file)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+        # Rotating file handler configuration
+        handler = RotatingFileHandler(
+            log_file,
+            maxBytes=5 * 1024 * 1024,
+            backupCount=3,
+            encoding='utf-8'
         )
 
-        # File handler for persistent logging
-        file_handler = logging.FileHandler(LOG_FILE)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        # Formatting for consistency
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
-        # Console handler for real-time monitoring
-        console_handler = logging.StreamHandler(sys.stdout)
+        # Optional: stdout logging for development
+        console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 

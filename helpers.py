@@ -2,24 +2,31 @@ import decimal
 from typing import Union
 
 def format_currency(value: Union[float, str, decimal.Decimal], precision: int = 2) -> str:
-    """Formats crypto values to human-readable string."""
-    d = decimal.Decimal(str(value))
-    return f"{d:,.{precision}f}"
+    """Formats crypto values to fixed decimal string."""
+    val = decimal.Decimal(str(value))
+    return f"{val:.{precision}f}"
 
-def calculate_percentage_change(old_value: float, new_value: float) -> float:
-    """Calculates percentage change between two values."""
-    if old_value == 0:
+def calculate_percentage_change(current: float, previous: float) -> float:
+    """Calculates percentage change between two price points."""
+    if previous == 0:
         return 0.0
-    return ((new_value - old_value) / old_value) * 100
+    return ((current - previous) / previous) * 100
 
 def validate_symbol(symbol: str) -> bool:
-    """Checks if symbol string follows standard crypto format."""
-    return bool(symbol and symbol.isalnum() and len(symbol) <= 10)
+    """Checks if crypto symbol format is valid."""
+    return bool(symbol and symbol.isalnum() and 2 <= len(symbol) <= 10)
 
-def sanitize_price_data(raw_data: dict) -> dict:
-    """Cleans raw API response dictionary."""
-    return {
-        "price": float(raw_data.get("price_usd", 0)),
-        "symbol": str(raw_data.get("symbol", "UNKNOWN")).upper(),
-        "timestamp": raw_data.get("last_updated", 0)
-    }
+def sanitize_input(value: str) -> str:
+    """Removes potential injection characters from inputs."""
+    return "".join(char for char in value if char.isalnum())
+
+def get_ticker_pair(base: str, quote: str) -> str:
+    """Combines base and quote into standard pair format."""
+    return f"{base.upper()}/{quote.upper()}"
+
+def parse_float(value: Union[str, float], default: float = 0.0) -> float:
+    """Safely converts value to float with default fallback."""
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default

@@ -1,27 +1,35 @@
-import sys
+import requests
+from typing import Dict, Optional
 
-def validate_ticker(ticker):
-    """Ensures ticker is a valid alphanumeric string."""
-    if not isinstance(ticker, str) or not ticker.isalnum() or len(ticker) < 2:
-        return False
-    return True
+class CryptoTracker:
+    """Core engine for crypto price tracking."""
 
-def process_market_data(tickers):
-    """Main processing loop with input validation."""
-    processed = []
-    for ticker in tickers:
-        if validate_ticker(ticker):
-            # Simulating API fetch for crypto asset
-            print(f"Fetching market data for: {ticker.upper()}")
-            processed.append(ticker.upper())
-        else:
-            print(f"Skipping invalid ticker format: {ticker}")
-    return processed
+    def __init__(self, base_url: str = "https://api.coingecko.com/api/v3"):
+        self.base_url = base_url
+        self.session = requests.Session()
+
+    def fetch_price(self, coin_id: str, currency: str = "usd") -> Optional[float]:
+        """Retrieve current price for a given coin identifier."""
+        endpoint = f"{self.base_url}/simple/price"
+        params = {"ids": coin_id, "vs_currencies": currency}
+        
+        try:
+            response = self.session.get(endpoint, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            return data.get(coin_id, {}).get(currency)
+        except (requests.RequestException, ValueError):
+            return None
+
+    def get_market_data(self, coin_ids: list) -> Dict[str, float]:
+        """Batch processing for multiple coin price updates."""
+        results = {}
+        for coin in coin_ids:
+            price = self.fetch_price(coin)
+            if price:
+                results[coin] = price
+        return results
 
 if __name__ == "__main__":
-    # Mock input from external source
-    raw_input = ["BTC", "ETH", "invalid_123", "SOL", "A"]
-    
-    print("Starting crypto-tracker-65 sync...")
-    results = process_market_data(raw_input)
-    print(f"Sync complete. Successfully processed: {len(results)} assets.")
+    tracker = CryptoTracker()
+    print(tracker.get_market_data(["bitcoin", "ethereum"]))

@@ -1,44 +1,32 @@
 import re
 
-class InputValidator:
-    """Validator for cryptocurrency tracking input parameters."""
+# Validation constraints for crypto assets
+SUPPORTED_SYMBOLS = {'BTC', 'ETH', 'SOL', 'ADA', 'DOT'}
 
-    # Regex for common crypto symbols (2-5 uppercase chars)
-    SYMBOL_PATTERN = re.compile(r'^[A-Z]{2,5}$')
+def validate_symbol(symbol: str) -> bool:
+    """Validates asset ticker symbols against whitelist."""
+    return isinstance(symbol, str) and symbol.upper() in SUPPORTED_SYMBOLS
 
-    @staticmethod
-    def validate_ticker(ticker: str) -> bool:
-        """Verify if the ticker format is acceptable."""
-        return bool(InputValidator.SYMBOL_PATTERN.match(ticker.upper()))
+def validate_amount(amount: float) -> bool:
+    """Checks if trade amount is a positive numeric value."""
+    return isinstance(amount, (int, float)) and amount > 0
 
-    @staticmethod
-    def validate_amount(amount: float) -> bool:
-        """Ensure the trade amount is a positive number."""
-        try:
-            val = float(amount)
-            return val > 0
-        except (ValueError, TypeError):
+def validate_request(data: dict) -> bool:
+    """Entry point for payload sanitization in processing loop."""
+    try:
+        symbol = data.get('symbol')
+        amount = data.get('amount')
+        
+        if not validate_symbol(symbol):
             return False
-
-    @staticmethod
-    def validate_fiat(currency: str) -> bool:
-        """Check if fiat code is standard 3-letter format."""
-        return isinstance(currency, str) and len(currency) == 3
-
-def process_input(data: dict):
-    """Main validation routine for crypto trade data."""
-    required = ['ticker', 'amount', 'fiat']
-    
-    # Ensure all keys exist
-    if not all(k in data for k in required):
+        
+        if not validate_amount(amount):
+            return False
+            
+        return True
+    except (AttributeError, TypeError):
         return False
 
-    # Run individual field checks
-    if not InputValidator.validate_ticker(data['ticker']):
-        return False
-    if not InputValidator.validate_amount(data['amount']):
-        return False
-    if not InputValidator.validate_fiat(data['fiat']):
-        return False
-
-    return True
+class ValidationError(Exception):
+    """Custom exception for input validation failures."""
+    pass

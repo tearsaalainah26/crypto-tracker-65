@@ -1,32 +1,34 @@
-import decimal
-from typing import Union
+from typing import List, Dict, Optional
+import logging
 
-def format_currency(value: Union[float, str, decimal.Decimal], precision: int = 2) -> str:
-    """Formats crypto values to fixed decimal string."""
-    val = decimal.Decimal(str(value))
-    return f"{val:.{precision}f}"
+logger = logging.getLogger(__name__)
 
-def calculate_percentage_change(current: float, previous: float) -> float:
+def format_currency(amount: float, symbol: str = 'USD') -> str:
+    """Formats a numeric amount into a currency string."""
+    return f"{amount:,.2f} {symbol}"
+
+def calculate_percentage_change(current: float, previous: float) -> Optional[float]:
     """Calculates percentage change between two price points."""
     if previous == 0:
-        return 0.0
+        return None
     return ((current - previous) / previous) * 100
 
-def validate_symbol(symbol: str) -> bool:
-    """Checks if crypto symbol format is valid."""
-    return bool(symbol and symbol.isalnum() and 2 <= len(symbol) <= 10)
+def filter_top_assets(assets: List[Dict[str, float]], threshold: float) -> List[Dict[str, float]]:
+    """Filters assets with price higher than the provided threshold."""
+    return [asset for asset in assets if asset.get("price", 0) >= threshold]
 
-def sanitize_input(value: str) -> str:
-    """Removes potential injection characters from inputs."""
-    return "".join(char for char in value if char.isalnum())
+def normalize_ticker(ticker: str) -> str:
+    """Converts ticker string to uppercase and strips whitespace."""
+    return ticker.strip().upper()
 
-def get_ticker_pair(base: str, quote: str) -> str:
-    """Combines base and quote into standard pair format."""
-    return f"{base.upper()}/{quote.upper()}"
-
-def parse_float(value: Union[str, float], default: float = 0.0) -> float:
-    """Safely converts value to float with default fallback."""
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return default
+def get_summary_report(data: List[Dict[str, float]]) -> Dict[str, float]:
+    """Generates a simple average and total price summary."""
+    if not data:
+        return {"total": 0.0, "average": 0.0}
+    
+    prices = [item.get("price", 0) for item in data]
+    total = sum(prices)
+    return {
+        "total": total,
+        "average": total / len(prices)
+    }

@@ -1,49 +1,62 @@
 import logging
-from typing import Any, Dict, List
+import time
+from typing import Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 
-def validate_payload(data: Dict[str, Any]) -> bool:
-    """Validate standard crypto ticker payload fields and types."""
-    if not isinstance(data, dict):
-        return False
+class CryptoAPIError(Exception):
+    """Base exception for cryptocurrency API communication failures."""
 
-    required_keys = {"symbol", "price", "volume", "timestamp"}
-    if not required_keys.issubset(data.keys()):
-        return False
+    pass
 
-    symbol = data.get("symbol")
-    if not isinstance(symbol, str) or len(symbol.strip()) < 3:
-        return False
+
+class InvalidSymbolError(CryptoAPIError):
+    """Raised when an invalid or unsupported symbol is requested."""
+
+    pass
+
+
+def parse_ticker_response(
+    raw_data: Optional[Dict[str, Any]], symbol: str
+) -> Dict[str, Union[str, float, int]]:
+    """Extracts price and market data from raw crypto provider responses.
+
+    Handles missing keys, unexpected payloads, and edge-case errors.
+    """
+    if raw_data is None:
+        logger.error("Received empty payload for symbol: %s", symbol)
+        raise CryptoAPIError(f"API returned empty response for '{symbol}'")
+
+    if not isinstance(raw_data, dict):
+        logger.error("Invalid payload type for %s: expected dict", symbol)
+        raise CryptoAPIError("Malformed JSON response from data provider")
+
+    if "error" in raw_data or "message" in raw_data:
+        err_msg = str(raw_data.get("error") or raw_data.get("message"))
+        if "not found" in err_msg.lower() or "invalid" in err_msg.lower():
+            raise InvalidSymbolError(f"Cryptocurrency symbol '{symbol}' not found")
+        raise CryptoAPIError(f"Provider error: {err_msg}")
+
+    payload = raw_data.get("data", raw_data)
 
     try:
-        price = float(data["price"])
-        volume = float(data["volume"])
-        timestamp = int(data["timestamp"])
-        if price <= 0 or volume < 0 or timestamp <= 0:
-            return False
-    except (ValueError, TypeError):
-        return False
+        price = float(payload["price"])
+        volume = float(payload.get("volume_24h", 0.0))
+        change = float(payload.get("change_24h", 0.0))
+    except (KeyError, TypeError, ValueError) as err:
+        logger.warning("Failed parsing numerical fields for %s: %s", symbol, err)
+        raise CryptoAPIError(
+            f"Incomplete or corrupt market data for symbol '{symbol}'"
+        ) from err
 
-    return True
+    if price <= 0:
+        logger.warning("Non-positive price anomaly detected for %s: %f", symbol, price)
 
-
-def process_ticker_batch(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Process stream batch with strict record validation in main loop."""
-    valid_records = []
-
-    for record in batch:
-        if not validate_payload(record):
-            logger.warning(f"Invalid record skipped: {record}")
-            continue
-
-        clean_data = {
-            "symbol": str(record["symbol"]).upper().strip(),
-            "price": round(float(record["price"]), 8),
-            "volume": round(float(record["volume"]), 4),
-            "timestamp": int(record["timestamp"]),
-        }
-        valid_records.append(clean_data)
-
-    return valid_records
+    return {
+        "symbol": symbol.upper(),
+        "price": price,
+        "volume_24h": volume,
+        "change_24h": change,
+        "timestamp": int(time.time()),
+    }

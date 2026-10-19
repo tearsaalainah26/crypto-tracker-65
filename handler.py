@@ -1,62 +1,42 @@
 import logging
-import time
-from typing import Any, Dict, Optional, Union
 
-logger = logging.getLogger(__name__)
+def validate_crypto_payload(data):
+    """Ensures payload contains valid ticker and volume fields."""
+    required_fields = {'ticker', 'volume'}
+    if not isinstance(data, dict):
+        return False
+    if not required_fields.issubset(data.keys()):
+        return False
+    if not isinstance(data['ticker'], str) or not isinstance(data['volume'], (int, float)):
+        return False
+    if data['volume'] <= 0:
+        return False
+    return True
 
+def process_stream(data_stream):
+    """Main loop for processing incoming crypto data packets."""
+    logger = logging.getLogger(__name__)
+    for packet in data_stream:
+        try:
+            if not validate_crypto_payload(packet):
+                logger.warning(f"Invalid packet structure received: {packet}")
+                continue
+            
+            ticker = packet['ticker'].upper()
+            volume = float(packet['volume'])
+            
+            # Processing logic for verified crypto data
+            print(f"Processing transaction: {ticker} @ {volume}")
+            
+        except (ValueError, KeyError, TypeError) as e:
+            logger.error(f"Processing error: {e}")
+            continue
 
-class CryptoAPIError(Exception):
-    """Base exception for cryptocurrency API communication failures."""
-
-    pass
-
-
-class InvalidSymbolError(CryptoAPIError):
-    """Raised when an invalid or unsupported symbol is requested."""
-
-    pass
-
-
-def parse_ticker_response(
-    raw_data: Optional[Dict[str, Any]], symbol: str
-) -> Dict[str, Union[str, float, int]]:
-    """Extracts price and market data from raw crypto provider responses.
-
-    Handles missing keys, unexpected payloads, and edge-case errors.
-    """
-    if raw_data is None:
-        logger.error("Received empty payload for symbol: %s", symbol)
-        raise CryptoAPIError(f"API returned empty response for '{symbol}'")
-
-    if not isinstance(raw_data, dict):
-        logger.error("Invalid payload type for %s: expected dict", symbol)
-        raise CryptoAPIError("Malformed JSON response from data provider")
-
-    if "error" in raw_data or "message" in raw_data:
-        err_msg = str(raw_data.get("error") or raw_data.get("message"))
-        if "not found" in err_msg.lower() or "invalid" in err_msg.lower():
-            raise InvalidSymbolError(f"Cryptocurrency symbol '{symbol}' not found")
-        raise CryptoAPIError(f"Provider error: {err_msg}")
-
-    payload = raw_data.get("data", raw_data)
-
-    try:
-        price = float(payload["price"])
-        volume = float(payload.get("volume_24h", 0.0))
-        change = float(payload.get("change_24h", 0.0))
-    except (KeyError, TypeError, ValueError) as err:
-        logger.warning("Failed parsing numerical fields for %s: %s", symbol, err)
-        raise CryptoAPIError(
-            f"Incomplete or corrupt market data for symbol '{symbol}'"
-        ) from err
-
-    if price <= 0:
-        logger.warning("Non-positive price anomaly detected for %s: %f", symbol, price)
-
-    return {
-        "symbol": symbol.upper(),
-        "price": price,
-        "volume_24h": volume,
-        "change_24h": change,
-        "timestamp": int(time.time()),
-    }
+if __name__ == '__main__':
+    # Simulation of incoming data stream
+    sample_data = [
+        {'ticker': 'BTC', 'volume': 0.5},
+        {'ticker': 'ETH', 'volume': -10}, 
+        {'invalid': 'data'}
+    ]
+    process_stream(sample_data)

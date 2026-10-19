@@ -1,32 +1,38 @@
-import re
+import logging
+from typing import Any, Optional
 
-# Validation constraints for crypto assets
-SUPPORTED_SYMBOLS = {'BTC', 'ETH', 'SOL', 'ADA', 'DOT'}
-
-def validate_symbol(symbol: str) -> bool:
-    """Validates asset ticker symbols against whitelist."""
-    return isinstance(symbol, str) and symbol.upper() in SUPPORTED_SYMBOLS
-
-def validate_amount(amount: float) -> bool:
-    """Checks if trade amount is a positive numeric value."""
-    return isinstance(amount, (int, float)) and amount > 0
-
-def validate_request(data: dict) -> bool:
-    """Entry point for payload sanitization in processing loop."""
-    try:
-        symbol = data.get('symbol')
-        amount = data.get('amount')
-        
-        if not validate_symbol(symbol):
-            return False
-        
-        if not validate_amount(amount):
-            return False
-            
-        return True
-    except (AttributeError, TypeError):
-        return False
+logger = logging.getLogger('crypto-tracker-65')
 
 class ValidationError(Exception):
-    """Custom exception for input validation failures."""
+    """Custom exception for validation failures."""
     pass
+
+def validate_price(price: Any) -> float:
+    """Ensures price is a positive numeric value."""
+    try:
+        val = float(price)
+        if val <= 0:
+            raise ValidationError(f"Price must be positive, got {val}")
+        return val
+    except (ValueError, TypeError) as e:
+        logger.error(f"Invalid price format received: {price}")
+        raise ValidationError(f"Price input must be numeric: {e}")
+
+def validate_ticker(ticker: Any) -> str:
+    """Validates that the ticker symbol is a string and non-empty."""
+    if not isinstance(ticker, str) or not ticker.strip():
+        logger.warning(f"Invalid ticker format attempt: {ticker}")
+        raise ValidationError("Ticker symbol must be a non-empty string")
+    return ticker.strip().upper()
+
+def validate_market_data(data: Optional[dict]) -> bool:
+    """Checks market data integrity before processing."""
+    if not data or not isinstance(data, dict):
+        return False
+    
+    required_keys = {'symbol', 'price', 'volume'}
+    if not required_keys.issubset(data.keys()):
+        logger.debug(f"Incomplete market data payload: {data.keys()}")
+        return False
+        
+    return True

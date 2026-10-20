@@ -1,76 +1,58 @@
-"""Crypto price and ticker data processor with resilient edge-case handling."""
-
-import logging
-from typing import Dict, Any, Optional, List
-
-logger = logging.getLogger(__name__)
+from typing import List, Dict, Any
+import datetime
 
 
-class ProcessingError(Exception):
-    """Custom exception for crypto data processing failures."""
-    pass
+class MarketDataProcessor:
+    """Processes raw cryptocurrency market data for analysis and tracking."""
 
+    def __init__(self, base_currency: str = "USD") -> None:
+        self.base_currency: str = base_currency.upper()
 
-def clean_ticker_price(val: Any) -> Optional[float]:
-    """Convert raw price input to float, handling nulls, strings, and invalid values."""
-    if val is None:
-        return None
-    try:
-        parsed = float(val)
-        if parsed < 0:
-            logger.warning(f"Negative price encountered: {parsed}")
-            return None
-        return parsed
-    except (ValueError, TypeError):
-        logger.error(f"Failed to parse price value: {val}")
-        return None
+    def calculate_vwap(self, trades: List[Dict[str, float]]) -> float:
+        """Calculate the Volume-Weighted Average Price (VWAP) from trade ticks.
 
+        Args:
+            trades: A list of dicts containing 'price' and 'volume' keys.
 
-def process_ticker_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract and normalize crypto ticker data safely.
-    
-    Handles malformed dicts, missing keys, and bad numeric formats.
-    """
-    if not isinstance(data, dict) or not data:
-        raise ProcessingError("Invalid or empty raw ticker payload")
+        Returns:
+            The volume-weighted average price as a float.
+        """
+        if not trades:
+            return 0.0
 
-    symbol = str(data.get("symbol", "")).upper().strip()
-    if not symbol:
-        raise ProcessingError("Missing symbol in ticker data")
+        total_volume: float = sum(trade.get("volume", 0.0) for trade in trades)
+        if total_volume == 0.0:
+            return 0.0
 
-    raw_price = data.get("price") or data.get("lastPrice") or data.get("current_price")
-    price = clean_ticker_price(raw_price)
-    if price is None:
-        logger.warning(f"Unprocessable or missing price for symbol: {symbol}")
+        total_price_volume: float = sum(
+            trade.get("price", 0.0) * trade.get("volume", 0.0) for trade in trades
+        )
+        return round(total_price_volume / total_volume, 4)
 
-    raw_volume = data.get("volume") or data.get("total_volume") or 0.0
-    try:
-        volume = max(0.0, float(raw_volume))
-    except (ValueError, TypeError):
-        volume = 0.0
+    def format_ticker_summary(
+        self, symbol: str, current_price: float, price_24h_ago: float, volume_24h: float
+    ) -> Dict[str, Any]:
+        """Format a summary dict for display in the crypto tracker interface.
 
-    return {
-        "symbol": symbol,
-        "price": price,
-        "volume_24h": volume,
-        "is_valid": price is not None and price > 0,
-    }
+        Args:
+            symbol: Ticker symbol (e.g., 'BTC').
+            current_price: Current market price.
+            price_24h_ago: Price 24 hours prior.
+            volume_24h: Total volume in 24 hours.
 
+        Returns:
+            Formatted market summary dictionary.
+        """
+        price_change: float = current_price - price_24h_ago
+        percent_change: float = (
+            (price_change / price_24h_ago) * 100 if price_24h_ago > 0 else 0.0
+        )
 
-def batch_process_tickers(payload: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Process multiple tickers safely, filtering out completely invalid records."""
-    if not isinstance(payload, list):
-        logger.error("Batch payload is not a list")
-        return []
-
-    results = []
-    for item in payload:
-        try:
-            processed = process_ticker_data(item)
-            results.append(processed)
-        except ProcessingError as err:
-            logger.debug(f"Skipping malformed ticker record: {err}")
-        except Exception as err:
-            logger.error(f"Unexpected error processing item {item}: {err}")
-
-    return results
+        return {
+            "symbol": f"{symbol.upper()}/{self.base_currency}",
+            "price": round(current_price, 2),
+            "change_24h": round(price_change, 2),
+            "percent_change_24h": round(percent_change, 2),
+            "volume_24h": round(volume_24h, 2),
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }

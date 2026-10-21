@@ -3,27 +3,21 @@ class CryptoTrackerError(Exception):
     pass
 
 class APIConnectionError(CryptoTrackerError):
-    """Raised when external crypto APIs are unreachable."""
+    """Raised when the crypto exchange API is unreachable."""
     pass
 
 class RateLimitExceeded(CryptoTrackerError):
-    """Raised when hitting API rate limits."""
+    """Raised when API rate limits are hit."""
     pass
 
 class DataValidationError(CryptoTrackerError):
-    """Raised when parsed crypto data is malformed."""
+    """Raised when incoming market data is malformed."""
     pass
 
 class ConfigurationError(CryptoTrackerError):
-    """Raised when environment variables or config files are missing."""
+    """Raised when environmental variables are missing or invalid."""
     pass
 
-def handle_crypto_exception(e: Exception) -> str:
-    """Centralized error mapping for logging and UI feedback."""
-    if isinstance(e, APIConnectionError):
-        return "Network issue: unable to reach crypto exchange."
-    if isinstance(e, RateLimitExceeded):
-        return "Rate limit hit: please wait before next request."
-    if isinstance(e, DataValidationError):
-        return "Data error: received invalid format from source."
-    return f"Unexpected application error: {str(e)}"
+class DatabaseError(CryptoTrackerError):
+    """Raised when database interactions fail."""
+    pass

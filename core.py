@@ -1,35 +1,30 @@
-import requests
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 class CryptoTracker:
-    """Core engine for crypto price tracking."""
+    """Manages tracking of cryptocurrency assets and price updates."""
 
-    def __init__(self, base_url: str = "https://api.coingecko.com/api/v3"):
-        self.base_url = base_url
-        self.session = requests.Session()
+    def __init__(self, symbols: List[str]) -> None:
+        self.symbols: List[str] = symbols
+        self.prices: Dict[str, float] = {}
 
-    def fetch_price(self, coin_id: str, currency: str = "usd") -> Optional[float]:
-        """Retrieve current price for a given coin identifier."""
-        endpoint = f"{self.base_url}/simple/price"
-        params = {"ids": coin_id, "vs_currencies": currency}
-        
-        try:
-            response = self.session.get(endpoint, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            return data.get(coin_id, {}).get(currency)
-        except (requests.RequestException, ValueError):
-            return None
+    def update_price(self, symbol: str, price: float) -> None:
+        """Updates internal price map for a specific ticker."""
+        if symbol in self.symbols:
+            self.prices[symbol] = price
 
-    def get_market_data(self, coin_ids: list) -> Dict[str, float]:
-        """Batch processing for multiple coin price updates."""
-        results = {}
-        for coin in coin_ids:
-            price = self.fetch_price(coin)
-            if price:
-                results[coin] = price
-        return results
+    def get_portfolio_value(self, holdings: Dict[str, float]) -> float:
+        """Calculates total value based on current price data."""
+        total: float = 0.0
+        for symbol, amount in holdings.items():
+            price: Optional[float] = self.prices.get(symbol)
+            if price is not None:
+                total += price * amount
+        return total
 
-if __name__ == "__main__":
-    tracker = CryptoTracker()
-    print(tracker.get_market_data(["bitcoin", "ethereum"]))
+    def fetch_all_symbols(self) -> List[str]:
+        """Returns the list of monitored cryptocurrency symbols."""
+        return self.symbols
+
+def format_currency(value: float, currency_code: str = "USD") -> str:
+    """Converts float to standardized currency string format."""
+    return f"{currency_code} {value:,.2f}"

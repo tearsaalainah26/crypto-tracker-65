@@ -3,16 +3,14 @@ import os
 from typing import Any, Dict
 
 DEFAULT_CONFIG = {
-    "api_url": "https://api.coingecko.com/api/v3",
+    "api_base_url": "https://api.coingecko.com/api/v3",
     "refresh_interval": 60,
-    "log_level": "INFO",
-    "symbols": ["BTC", "ETH", "SOL"]
+    "currency": "usd",
+    "max_retries": 3
 }
 
 def load_config(config_path: str = "config.json") -> Dict[str, Any]:
-    """
-    Loads configuration from json file with fallback to defaults.
-    """
+    """Load configuration from file with fallback to hardcoded defaults."""
     config = DEFAULT_CONFIG.copy()
     
     if os.path.exists(config_path):
@@ -21,13 +19,11 @@ def load_config(config_path: str = "config.json") -> Dict[str, Any]:
                 user_config = json.load(f)
                 config.update(user_config)
         except (json.JSONDecodeError, IOError) as e:
-            print(f"Warning: Failed to load {config_path}: {e}. Using defaults.")
-            
+            print(f"Warning: failed to load {config_path}: {e}. Using defaults.")
+    
     return config
 
-def validate_config(config: Dict[str, Any]) -> bool:
-    """
-    Checks if essential configuration keys are present.
-    """
-    required_keys = ["api_url", "symbols"]
-    return all(key in config for key in required_keys)
+def get_config_value(key: str, default: Any = None) -> Any:
+    """Retrieve specific configuration value safely."""
+    config = load_config()
+    return config.get(key, default)

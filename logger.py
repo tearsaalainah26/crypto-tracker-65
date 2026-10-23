@@ -1,50 +1,41 @@
-import os
 import logging
-from logging.handlers import RotatingFileHandler
+import sys
+from typing import Optional
 
+def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
+    """
+    Configures a standardized logger instance for the crypto-tracker-65 application.
 
-def setup_logger(
-    name: str = "crypto_tracker",
-    log_file: str = "logs/tracker.log",
-    level: int = logging.INFO,
-    max_bytes: int = 5 * 1024 * 1024,
-    backup_count: int = 3
-) -> logging.Logger:
-    """Configures and returns a logger with console and rotating file handlers."""
-    logger = logging.getLogger(name)
+    Args:
+        name (str): Name of the logger instance.
+        level (int): Logging threshold level.
+
+    Returns:
+        logging.Logger: Configured logger object.
+    """
+    logger: logging.Logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    # Prevent duplicate handlers if function is called multiple times
-    if logger.hasHandlers():
-        return logger
-
-    log_formatter = logging.Formatter(
-        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+    formatter: logging.Formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    # Create log directory if it does not exist
-    log_dir = os.path.dirname(log_file)
-    if log_dir:
-        os.makedirs(log_dir, exist_ok=True)
+    console_handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
 
-    # Console output handler
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(log_formatter)
-    logger.addHandler(console_handler)
-
-    # File output handler with log rotation
-    file_handler = RotatingFileHandler(
-        filename=log_file,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8"
-    )
-    file_handler.setFormatter(log_formatter)
-    logger.addHandler(file_handler)
+    if not logger.handlers:
+        logger.addHandler(console_handler)
 
     return logger
 
+def log_trade_event(logger: logging.Logger, symbol: str, amount: float, price: float) -> None:
+    """
+    Logs a formatted trade execution event for auditing purposes.
 
-# Default logger instance for the crypto tracker core
-tracker_logger = setup_logger()
+    Args:
+        logger (logging.Logger): The active logger instance.
+        symbol (str): Cryptocurrency trading pair.
+        amount (float): Quantity of assets traded.
+        price (float): Execution price of the trade.
+    """
+    logger.info(f"Trade executed: {symbol} | Amount: {amount:.4f} | Price: ${price:.2f}")

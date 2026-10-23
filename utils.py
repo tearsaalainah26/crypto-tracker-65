@@ -1,27 +1,42 @@
-import time
-import functools
-import logging
-from typing import Callable, Any
+from datetime import datetime, timezone
+from typing import Dict, Any
 
-logger = logging.getLogger(__name__)
 
-def retry_request(max_retries: int = 3, backoff: float = 2.0):
-    """Decorator for retrying network requests on failure."""
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            retries = 0
-            delay = backoff
-            while retries < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    retries += 1
-                    if retries >= max_retries:
-                        logger.error(f"Max retries reached for {func.__name__}: {e}")
-                        raise
-                    logger.warning(f"Retry {retries}/{max_retries} for {func.__name__} after {delay}s error: {e}")
-                    time.sleep(delay)
-                    delay *= 2
-        return wrapper
-    return decorator
+def normalize_symbol(symbol: str) -> str:
+    """Format raw trading symbol into standard uppercase BASE/QUOTE format."""
+    clean_symbol = symbol.replace("-", "").replace("_", "").replace("/", "").upper()
+    if clean_symbol.endswith("USDT"):
+        return f"{clean_symbol[:-4]}/USDT"
+    if clean_symbol.endswith("USD"):
+        return f"{clean_symbol[:-3]}/USD"
+    if clean_symbol.endswith("BTC"):
+        return f"{clean_symbol[:-3]}/BTC"
+    return clean_symbol
+
+
+def format_currency(val: float, precision: int = 2) -> str:
+    """Format float values as localized currency strings with adaptive precision."""
+    if val >= 1.0:
+        return f"${val:,.{precision}f}"
+    return f"${val:.6f}"
+
+
+def calculate_price_change(current: float, previous: float) -> Dict[str, Any]:
+    """Calculate absolute and percentage change between two price points."""
+    if previous <= 0:
+        return {"diff": 0.0, "pct_change": 0.0, "is_bullish": False}
+
+    diff = current - previous
+    pct_change = (diff / previous) * 100
+    return {
+        "diff": round(diff, 6),
+        "pct_change": round(pct_change, 2),
+        "is_bullish": diff >= 0,
+    }
+
+
+def parse_unix_timestamp(ts: int) -> str:
+    """Convert unix timestamp in seconds or milliseconds to ISO 8601 string."""
+    ts_seconds = ts / 1000.0 if ts > 1e11 else float(ts)
+    dt = datetime.fromtimestamp(ts_seconds, tz=timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")

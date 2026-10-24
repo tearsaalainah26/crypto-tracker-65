@@ -1,34 +1,27 @@
 import time
-from decimal import Decimal, ROUND_HALF_UP
+from typing import Dict, Optional, Any
 
-def format_currency(value, precision=2):
-    """Formats a crypto price to a rounded decimal string."""
-    val = Decimal(str(value))
-    return str(val.quantize(Decimal('1.' + '0' * precision), rounding=ROUND_HALF_UP))
+def format_currency(amount: float, symbol: str = 'USD') -> str:
+    """Formats a numerical crypto balance as a currency string."""
+    return f"{amount:,.4f} {symbol}"
 
-def get_timestamp():
-    """Returns current unix timestamp in milliseconds."""
-    return int(time.time() * 1000)
-
-def calculate_percentage_change(current, previous):
-    """Calculates percentage change between two values."""
-    if not previous or previous == 0:
+def calculate_profit(initial: float, current: float) -> float:
+    """Calculates percentage profit given initial and current price."""
+    if initial == 0:
         return 0.0
-    return float(((current - previous) / previous) * 100)
+    return ((current - initial) / initial) * 100
 
-def validate_symbol(symbol):
-    """Basic sanitization for cryptocurrency ticker symbols."""
-    if not isinstance(symbol, str) or not symbol.isalnum():
-        return False
-    return symbol.upper().strip()
+def get_timestamp() -> int:
+    """Returns the current epoch timestamp as an integer."""
+    return int(time.time())
 
-def retry_operation(func, retries=3, delay=1):
-    """Decorator logic for network-based operations with simple retry."""
-    for i in range(retries):
-        try:
-            return func()
-        except Exception:
-            if i == retries - 1:
-                raise
-            time.sleep(delay)
-            delay *= 2
+def sanitize_ticker(ticker: str) -> str:
+    """Standardizes ticker symbols to uppercase."""
+    return ticker.strip().upper()
+
+def parse_response(data: Dict[str, Any], key: str) -> Optional[Any]:
+    """Safely extracts values from API response dictionaries."""
+    try:
+        return data.get(key)
+    except AttributeError:
+        return None

@@ -1,42 +1,34 @@
-from datetime import datetime, timezone
-from typing import Dict, Any
+import time
+from decimal import Decimal, ROUND_HALF_UP
 
+def format_currency(value, precision=2):
+    """Formats a crypto price to a rounded decimal string."""
+    val = Decimal(str(value))
+    return str(val.quantize(Decimal('1.' + '0' * precision), rounding=ROUND_HALF_UP))
 
-def normalize_symbol(symbol: str) -> str:
-    """Format raw trading symbol into standard uppercase BASE/QUOTE format."""
-    clean_symbol = symbol.replace("-", "").replace("_", "").replace("/", "").upper()
-    if clean_symbol.endswith("USDT"):
-        return f"{clean_symbol[:-4]}/USDT"
-    if clean_symbol.endswith("USD"):
-        return f"{clean_symbol[:-3]}/USD"
-    if clean_symbol.endswith("BTC"):
-        return f"{clean_symbol[:-3]}/BTC"
-    return clean_symbol
+def get_timestamp():
+    """Returns current unix timestamp in milliseconds."""
+    return int(time.time() * 1000)
 
+def calculate_percentage_change(current, previous):
+    """Calculates percentage change between two values."""
+    if not previous or previous == 0:
+        return 0.0
+    return float(((current - previous) / previous) * 100)
 
-def format_currency(val: float, precision: int = 2) -> str:
-    """Format float values as localized currency strings with adaptive precision."""
-    if val >= 1.0:
-        return f"${val:,.{precision}f}"
-    return f"${val:.6f}"
+def validate_symbol(symbol):
+    """Basic sanitization for cryptocurrency ticker symbols."""
+    if not isinstance(symbol, str) or not symbol.isalnum():
+        return False
+    return symbol.upper().strip()
 
-
-def calculate_price_change(current: float, previous: float) -> Dict[str, Any]:
-    """Calculate absolute and percentage change between two price points."""
-    if previous <= 0:
-        return {"diff": 0.0, "pct_change": 0.0, "is_bullish": False}
-
-    diff = current - previous
-    pct_change = (diff / previous) * 100
-    return {
-        "diff": round(diff, 6),
-        "pct_change": round(pct_change, 2),
-        "is_bullish": diff >= 0,
-    }
-
-
-def parse_unix_timestamp(ts: int) -> str:
-    """Convert unix timestamp in seconds or milliseconds to ISO 8601 string."""
-    ts_seconds = ts / 1000.0 if ts > 1e11 else float(ts)
-    dt = datetime.fromtimestamp(ts_seconds, tz=timezone.utc)
-    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+def retry_operation(func, retries=3, delay=1):
+    """Decorator logic for network-based operations with simple retry."""
+    for i in range(retries):
+        try:
+            return func()
+        except Exception:
+            if i == retries - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2

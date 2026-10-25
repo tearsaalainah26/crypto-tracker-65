@@ -1,26 +1,22 @@
-import os
 from typing import Final
 
-# Network and API settings
-API_BASE_URL: Final[str] = 'https://api.coingecko.com/api/v3'
-DEFAULT_TIMEOUT: Final[int] = 10
+# Cache configurations for high-frequency trading data
+CACHE_TTL: Final[int] = 60
+CACHE_MAX_SIZE: Final[int] = 1024
 
-# Supported cryptocurrency tickers
-SUPPORTED_COINS: Final[list[str]] = ['bitcoin', 'ethereum', 'solana', 'cardano']
+# Network optimization parameters
+REQUEST_TIMEOUT: Final[float] = 5.0
+MAX_RETRIES: Final[int] = 3
+CONNECTION_POOL_SIZE: Final[int] = 20
 
-# Storage and path configuration
-DATA_DIR: Final[str] = os.getenv('CRYPTO_DATA_DIR', './data')
-LOG_FILE: Final[str] = os.path.join(DATA_DIR, 'crypto_tracker.log')
+# Data processing batch sizes
+BATCH_SIZE: Final[int] = 100
+CONCURRENT_WORKERS: Final[int] = 4
 
-# Refresh intervals in seconds
-UPDATE_INTERVAL: Final[int] = 60
-RATE_LIMIT_DELAY: Final[float] = 1.5
+# Resource limits for memory management
+MEMORY_THRESHOLD_MB: Final[int] = 512
+GC_COLLECTION_INTERVAL: Final[int] = 300
 
-# Logging format
-LOG_FORMAT: Final[str] = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-
-# Default HTTP headers
-HEADERS: Final[dict[str, str]] = {
-    'Accept': 'application/json',
-    'User-Agent': 'crypto-tracker-65/1.0'
-}
+# API rate limiting
+RATE_LIMIT_PER_SECOND: Final[int] = 50
+BACKOFF_FACTOR: Final[float] = 1.5

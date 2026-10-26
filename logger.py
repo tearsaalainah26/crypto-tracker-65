@@ -1,51 +1,33 @@
 import logging
-import sys
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
+import os
 
-
-def setup_logger(
-    name: str = "crypto_tracker",
-    log_file: str = "logs/crypto_tracker.log",
-    level: int = logging.INFO,
-    max_bytes: int = 5 * 1024 * 1024,
-    backup_count: int = 5,
-) -> logging.Logger:
-    """Configures and returns a logger instance with rotating file and console handlers."""
+def setup_logger(name: str, log_file: str = 'crypto_tracker.log') -> logging.Logger:
+    """Configures a rotating file logger for crypto-tracker-65."""
     logger = logging.getLogger(name)
-    logger.setLevel(level)
+    logger.setLevel(logging.INFO)
 
-    if logger.handlers:
-        return logger
+    # Prevent duplicate handlers if logger is re-initialized
+    if not logger.handlers:
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
 
-    # Ensure target log directory exists
-    log_path = Path(log_file)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Rotate at 5MB, keep 3 backup files
+        file_handler = RotatingFileHandler(
+            log_file, 
+            maxBytes=5 * 1024 * 1024, 
+            backupCount=3
+        )
+        file_handler.setFormatter(formatter)
+        
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
 
-    formatter = logging.Formatter(
-        "[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    # File handler with size-based rotation
-    file_handler = RotatingFileHandler(
-        filename=log_path,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(level)
-    logger.addHandler(file_handler)
-
-    # Stream handler for console logging
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(level)
-    logger.addHandler(console_handler)
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
 
     return logger
 
-
-# Default application logger
-logger = setup_logger()
+# Instance for global application usage
+tracker_logger = setup_logger('crypto-tracker-65')

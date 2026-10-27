@@ -1,53 +1,53 @@
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timezone
+import time
+from typing import Dict, Any, List, Tuple, Optional
 
 class CryptoProcessor:
-    """Processes and normalizes raw cryptocurrency market data."""
+    ALLOWED_SYMBOLS = {"BTC", "ETH", "SOL", "ADA", "DOT"}
 
-    def __init__(self, base_currency: str = "USD") -> None:
-        self.base_currency = base_currency.upper()
+    def __init__(self):
+        self.processed_ticks: List[Dict[str, Any]] = []
 
-    def clean_ticker_data(self, raw_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Extracts and cleans essential ticker fields from raw API payload."""
-        if not raw_data or "symbol" not in raw_data:
-            return None
+    def validate_input(self, tick: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """Validate cryptocurrency tick data format and values."""
+        if not isinstance(tick, dict):
+            return False, "payload must be a dictionary"
 
-        price = float(raw_data.get("price", 0.0))
-        volume = float(raw_data.get("volume", 0.0))
-        change_24h = float(raw_data.get("change_24h", 0.0))
+        symbol = tick.get("symbol")
+        if not isinstance(symbol, str) or symbol.upper() not in self.ALLOWED_SYMBOLS:
+            return False, f"unsupported or invalid symbol: {symbol}"
 
-        return {
-            "symbol": str(raw_data["symbol"]).upper(),
-            "price": round(price, 4),
-            "volume_24h": round(volume, 2),
-            "change_24h_pct": round(change_24h, 2),
-            "base_currency": self.base_currency,
-            "processed_at": datetime.now(timezone.utc).isoformat(),
-        }
+        price = tick.get("price")
+        if not isinstance(price, (int, float)) or price <= 0:
+            return False, f"price must be a positive number, got: {price}"
 
-    def batch_process_tickers(self, tickers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Filters invalid records and processes a list of raw ticker payloads."""
-        processed = []
-        for item in tickers:
-            cleaned = self.clean_ticker_data(item)
-            if cleaned and cleaned["price"] > 0:
-                processed.append(cleaned)
-        return processed
+        volume = tick.get("volume")
+        if not isinstance(volume, (int, float)) or volume < 0:
+            return False, f"volume must be non-negative, got: {volume}"
 
-    def calculate_portfolio_value(self, holdings: Dict[str, float], prices: Dict[str, float]) -> Dict[str, Any]:
-        """Calculates total portfolio valuation from cleaned price mapping."""
-        total_val = 0.0
-        breakdown = {}
+        timestamp = tick.get("timestamp")
+        current_time = time.time()
+        if not isinstance(timestamp, (int, float)) or timestamp > current_time + 60:
+            return False, f"invalid or future timestamp: {timestamp}"
 
-        for symbol, amount in holdings.items():
-            sym_upper = symbol.upper()
-            unit_price = prices.get(sym_upper, 0.0)
-            asset_value = round(amount * unit_price, 2)
-            breakdown[sym_upper] = asset_value
-            total_val += asset_value
+        return True, None
 
-        return {
-            "total_value": round(total_val, 2),
-            "currency": self.base_currency,
-            "breakdown": breakdown,
-        }
+    def process_stream(self, data_stream: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Main processing loop with input validation."""
+        valid_entries = []
+        for item in data_stream:
+            is_valid, error = self.validate_input(item)
+            if not is_valid:
+                print(f"[VALIDATION_FAILED] {error}")
+                continue
+
+            clean_record = {
+                "symbol": item["symbol"].upper(),
+                "price": float(item["price"]),
+                "volume": float(item["volume"]),
+                "timestamp": float(item["timestamp"]),
+                "processed_at": time.time()
+            }
+            valid_entries.append(clean_record)
+
+        self.processed_ticks.extend(valid_entries)
+        return valid_entries

@@ -1,27 +1,22 @@
 import time
-import logging
-from typing import Dict, Any, Optional
+from decimal import Decimal
+from typing import Union
 
-logger = logging.getLogger('crypto-tracker-65')
+def format_currency(value: Union[float, Decimal, str], precision: int = 2) -> str:
+    """Converts numeric input to a formatted currency string."""
+    val = Decimal(str(value))
+    return f"${val:,.{precision}f}"
 
-def format_price(amount: float, currency: str = 'USD') -> str:
-    """Formats price values into standardized currency strings."""
-    return f"{amount:,.2f} {currency}"
+def get_timestamp() -> int:
+    """Returns current UTC unix timestamp."""
+    return int(time.time())
 
 def calculate_percentage_change(current: float, previous: float) -> float:
-    """Calculates percentage difference between two price points."""
+    """Calculates percentage difference between two values."""
     if previous == 0:
         return 0.0
     return ((current - previous) / previous) * 100
 
-def get_timestamp() -> int:
-    """Returns current unix timestamp for ledger entries."""
-    return int(time.time())
-
-def sanitize_ticker(ticker: str) -> str:
-    """Normalizes ticker strings to uppercase format."""
-    return str(ticker).strip().upper()
-
-def log_trade_event(event_type: str, data: Dict[str, Any]) -> None:
-    """Centralized logger for trade-related monitoring."""
-    logger.info(f"[{event_type.upper()}] Data: {data} at {get_timestamp()}")
+def validate_ticker(ticker: str) -> bool:
+    """Checks if ticker format is valid uppercase alphanumeric."""
+    return bool(ticker and ticker.isalnum() and ticker.isupper())

@@ -1,28 +1,36 @@
-import json
 import os
-from typing import Any, Dict
+from typing import Dict, Any
 
-DEFAULT_CONFIG = {
-    "api_base_url": "https://api.coingecko.com/api/v3",
-    "refresh_interval": 60,
-    "currency": "usd",
-    "log_level": "INFO"
-}
+class Config:
+    """Configuration settings for crypto-tracker-65 application."""
 
-def load_config(config_path: str = "config.json") -> Dict[str, Any]:
-    """Load configuration from file or return defaults."""
-    config = DEFAULT_CONFIG.copy()
-    
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r") as f:
-                user_config = json.load(f)
-                config.update(user_config)
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"Warning: failed to load config file: {e}. Using defaults.")
-            
-    return config
+    def __init__(self) -> None:
+        self.api_key: str = os.getenv("CRYPTO_API_KEY", "default_key")
+        self.base_url: str = "https://api.coingecko.com/api/v3"
+        self.request_timeout: int = 30
+        self.refresh_interval: int = 60
 
-def get_setting(key: str, config: Dict[str, Any]) -> Any:
-    """Retrieve specific setting with fallback to defaults."""
-    return config.get(key, DEFAULT_CONFIG.get(key))
+    def get_headers(self) -> Dict[str, str]:
+        """Return authentication headers for API requests."""
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+
+    @classmethod
+    def validate_env(cls) -> bool:
+        """Ensure required environment variables are present."""
+        required_vars: list[str] = ["CRYPTO_API_KEY"]
+        return all(os.getenv(var) is not None for var in required_vars)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Export configuration as a dictionary."""
+        return {
+            "api_key": self.api_key,
+            "base_url": self.base_url,
+            "timeout": self.request_timeout,
+            "interval": self.refresh_interval
+        }
+
+app_config: Config = Config()

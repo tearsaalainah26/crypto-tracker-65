@@ -1,28 +1,33 @@
-import time
-import functools
-import logging
-from typing import Callable, Any
+from functools import lru_cache
+import re
 
-logger = logging.getLogger(__name__)
+# regex pattern for cryptocurrency symbol validation
+SYMBOL_PATTERN = re.compile(r'^[A-Z0-9]{2,10}$')
 
-def retry_on_failure(retries: int = 3, delay: float = 1.0) -> Callable:
-    """Decorator to implement exponential backoff for network requests."""
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exception = None
-            current_delay = delay
+@lru_cache(maxsize=128)
+def validate_ticker(symbol: str) -> bool:
+    """verify crypto ticker format using cached results"""
+    if not isinstance(symbol, str):
+        return False
+    return bool(SYMBOL_PATTERN.match(symbol.strip().upper()))
+
+def batch_validate_tickers(symbols: list[str]) -> list[str]:
+    """efficient validation of list of symbols"""
+    return [s for s in symbols if validate_ticker(s)]
+
+class DataValidator:
+    """performance-oriented validator for crypto price packets"""
+    def __init__(self, required_fields: tuple = ('price', 'symbol', 'ts')):
+        self.required_fields = set(required_fields)
+
+    def is_valid_packet(self, data: dict) -> bool:
+        """fast schema verification using set intersection"""
+        if not isinstance(data, dict):
+            return False
+        
+        # verify required fields existence
+        if not self.required_fields.issubset(data.keys()):
+            return False
             
-            for attempt in range(retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {current_delay}s...")
-                    time.sleep(current_delay)
-                    current_delay *= 2
-            
-            logger.error(f"Function {func.__name__} failed after {retries} attempts.")
-            raise last_exception
-        return wrapper
-    return decorator
+        # validate symbol content
+        return validate_ticker(data['symbol'])

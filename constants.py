@@ -1,22 +1,42 @@
-from typing import Final
+"""Constants and configuration defaults for crypto-tracker-65."""
 
-# Cache configurations for high-frequency trading data
-CACHE_TTL: Final[int] = 60
-CACHE_MAX_SIZE: Final[int] = 1024
+from typing import Dict, List, Final
 
-# Network optimization parameters
-REQUEST_TIMEOUT: Final[float] = 5.0
+# Base API Endpoints
+COINGECKO_BASE_URL: Final[str] = "https://api.coingecko.com/api/v3"
+BINANCE_BASE_URL: Final[str] = "https://api.binance.com/api/v3"
+
+# Default Tracking Parameters
+DEFAULT_CURRENCY: Final[str] = "usd"
+DEFAULT_REFRESH_INTERVAL_SECONDS: Final[int] = 30
 MAX_RETRIES: Final[int] = 3
-CONNECTION_POOL_SIZE: Final[int] = 20
+REQUEST_TIMEOUT_SECONDS: Final[int] = 10
 
-# Data processing batch sizes
-BATCH_SIZE: Final[int] = 100
-CONCURRENT_WORKERS: Final[int] = 4
+# Supported Cryptocurrency Identifiers
+TOP_TRACKED_ASSETS: Final[List[str]] = [
+    "bitcoin",
+    "ethereum",
+    "solana",
+    "cardano",
+    "ripple",
+    "polkadot",
+    "avalanche-2",
+]
 
-# Resource limits for memory management
-MEMORY_THRESHOLD_MB: Final[int] = 512
-GC_COLLECTION_INTERVAL: Final[int] = 300
+# Market Data Display Preferences
+PRICE_DECIMAL_PLACES: Final[Dict[str, int]] = {
+    "usd": 2,
+    "eur": 2,
+    "gbp": 2,
+    "btc": 6,
+    "eth": 4,
+}
 
-# API rate limiting
-RATE_LIMIT_PER_SECOND: Final[int] = 50
-BACKOFF_FACTOR: Final[float] = 1.5
+# Cache Duration Settings
+CACHE_TTL_PRICES: Final[int] = 15  # seconds
+CACHE_TTL_METADATA: Final[int] = 3600  # 1 hour
+
+# Status Identifiers
+STATUS_OK: Final[str] = "OK"
+STATUS_ERROR: Final[str] = "ERROR"
+STATUS_STALE: Final[str] = "STALE"

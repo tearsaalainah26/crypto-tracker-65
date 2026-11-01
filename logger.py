@@ -1,31 +1,39 @@
 import logging
-import sys
 from logging.handlers import RotatingFileHandler
+import os
 
-def setup_logger(name: str = 'crypto-tracker-65') -> logging.Logger:
-    """Initializes application-wide logger with rotation."""
+LOG_DIR = "logs"
+LOG_FILE = "crypto_tracker.log"
+MAX_BYTES = 5 * 1024 * 1024
+BACKUP_COUNT = 3
+
+def setup_logger(name: str) -> logging.Logger:
+    """Configures a rotating file logger for the application."""
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-
-    # File handler with 5MB rotation limit
-    file_handler = RotatingFileHandler(
-        'tracker.log', 
-        maxBytes=5*1024*1024, 
-        backupCount=2
+    # File handler with rotation
+    file_path = os.path.join(LOG_DIR, LOG_FILE)
+    handler = RotatingFileHandler(
+        file_path, 
+        maxBytes=MAX_BYTES, 
+        backupCount=BACKUP_COUNT
     )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    handler.setFormatter(formatter)
+
+    # Console handler for visibility
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+
+    if not logger.handlers:
+        logger.addHandler(handler)
+        logger.addHandler(console)
 
     return logger
-
-# Global logger instance for consistency across modules
-app_logger = setup_logger()

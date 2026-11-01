@@ -1,38 +1,32 @@
+from typing import Dict, List, Optional, Any
 import logging
-from typing import Dict, Optional, Any
 
-# Configure logging for data processing
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('crypto-tracker-65')
+logger = logging.getLogger(__name__)
 
-def normalize_crypto_data(raw_data: Dict[str, Any]) -> Optional[Dict[str, float]]:
-    """
-    Extracts price and volume from raw exchange API responses.
-    Ensures numerical consistency for tracking.
-    """
-    try:
-        ticker = raw_data.get('symbol', 'UNKNOWN')
-        price = float(raw_data.get('price', 0.0))
-        volume = float(raw_data.get('volume_24h', 0.0))
-        
-        if price <= 0:
-            logger.warning(f"Invalid price received for {ticker}: {price}")
+class CryptoHandler:
+    """Handles market data processing for crypto-tracker-65."""
+
+    def __init__(self, api_key: str, base_currency: str = "USD"):
+        """Initialize the handler with authentication and settings."""
+        self.api_key = api_key
+        self.base_currency = base_currency
+
+    def process_ticker_update(self, data: Dict[str, Any]) -> Optional[float]:
+        """Extract price from ticker update payload."""
+        try:
+            price = data.get("price")
+            if not isinstance(price, (int, float)):
+                return None
+            return float(price)
+        except (ValueError, TypeError) as e:
+            logger.error(f"Data parsing error: {e}")
             return None
-            
-        return {
-            'symbol': ticker.upper(),
-            'price': price,
-            'volume': volume,
-            'timestamp': raw_data.get('ts')
-        }
-    except (ValueError, TypeError) as e:
-        logger.error(f"Data parsing failure: {e}")
-        return None
 
-def calculate_percentage_change(current: float, previous: float) -> float:
-    """
-    Calculates relative change between two price points.
-    """
-    if previous == 0:
-        return 0.0
-    return ((current - previous) / previous) * 100
+    def format_portfolio(self, holdings: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Aggregate current holdings into a summary dictionary."""
+        summary: Dict[str, float] = {}
+        for item in holdings:
+            symbol = str(item.get("symbol", "UNKNOWN"))
+            amount = float(item.get("amount", 0.0))
+            summary[symbol] = summary.get(symbol, 0.0) + amount
+        return summary

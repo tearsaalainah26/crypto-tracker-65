@@ -1,52 +1,60 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 # crypto-tracker-65
 
-`crypto-tracker-65` is an asynchronous Python client designed to stream real-time market data and calculate portfolio valuations across multiple cryptocurrency exchanges. It monitors price fluctuations, aggregates order book depth, and triggers customizable alerts directly to your terminal or webhook endpoints.
+`crypto-tracker-65` is an asynchronous Python library and CLI tool designed for real-time cryptocurrency price monitoring across major exchanges via low-latency WebSocket feeds. It aggregates live order book snapshots, tracks portfolio performance, and triggers automated alerts when custom market conditions are met.
 
 ## Features
 
-- **Multi-Exchange Streaming:** Unified WebSocket interface for continuous price feeds from Binance, Coinbase, and Kraken.
-- **Custom Volatility Alerts:** Threshold-based notifications for sudden price swings, volume spikes, and unusual gas fee movements.
-- **Historical Data Caching:** Automated SQLite logging for OHLCV candles to support offline strategy backtesting.
-- **Async Overhead:** Built on `asyncio` and `aiohttp` for low-latency processing and minimal system resource usage.
+* **Multi-Exchange Streaming:** Connects concurrently to Binance, Coinbase, and Kraken WebSockets to stream tick-level price data.
+* **Custom Alert Triggers:** Configurable threshold engine for desktop and webhook notifications on price movements, RSI divergence, or volume spikes.
+* **Local PnL Tracking:** Automatically computes real-time portfolio profit/loss against historical purchase data stored in a lightweight local SQLite database.
+* **Structured Data Export:** Dumps raw price streams and aggregated OHLCV candles to JSON or CSV for offline technical analysis.
 
 ## Installation
 
-Clone the repository and install the dependencies using `pip`:
+Ensure you have Python 3.9+ installed on your system.
 
 ```bash
 git clone https://github.com/Developer/crypto-tracker-65.git
 cd crypto-tracker-65
 pip install -r requirements.txt
+python setup.py install
 ```
 
 ## Quick Start
 
-Create a `config.json` with your monitored pairs or run the async tracker directly in your Python code:
+### Basic CLI Usage
+
+Track live pairs directly from your terminal:
+
+```bash
+crypto-tracker --pairs BTC/USDT ETH/USDT --exchange binance --interval 5s
+```
+
+### Python API Example
+
+Integrate real-time monitoring into your own Python scripts:
 
 ```python
 import asyncio
-from crypto_tracker import TrackerEngine
+from crypto_tracker import MarketMonitor
 
-async def monitor_market():
-    # Initialize tracker for target assets
-    tracker = TrackerEngine(pairs=["BTC/USDT", "ETH/USDT"], exchange="binance")
-    
-    print("Starting live ticker stream...")
-    async for ticker in tracker.stream_tickers():
-        print(f"[{ticker.exchange}] {ticker.pair}: ${ticker.price:,.2f} | 24h Vol: {ticker.volume_24h}")
+async def main():
+    # Initialize monitor for specified trading pairs
+    monitor = MarketMonitor(pairs=["BTC/USDT", "ETH/USDT"], exchange="binance")
+
+    # Set an automated alert for price thresholds
+    monitor.add_alert(pair="BTC/USDT", target_price=65000.00, direction="above")
+
+    # Start streaming live market data
+    async for tick in monitor.stream():
+        print(f"[{tick.timestamp}] {tick.pair}: ${tick.price:,.2f}")
 
 if __name__ == "__main__":
-    asyncio.run(monitor_market())
-```
-
-Run via CLI to output formatted tracking logs:
-
-```bash
-python -m crypto_tracker --pairs BTC/USDT ETH/USDT --interval 5s
+    asyncio.run(main())
 ```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the [MIT License](LICENSE).

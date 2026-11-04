@@ -1,63 +1,58 @@
-from datetime import datetime
-from typing import Dict, List, Optional, Union
+import time
+import json
+import logging
+import urllib.request
+import urllib.error
+from functools import wraps
+from typing import Callable, Any, Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+def retry_on_failure(
+    max_retries: int = 3,
+    delay: float = 1.0,
+    backoff: float = 2.0,
+    exceptions: Tuple[type, ...] = (urllib.error.URLError, TimeoutError, OSError)
+) -> Callable:
+    """Decorator that retries a network operation with exponential backoff."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            current_delay = delay
+            for attempt in range(1, max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as err:
+                    if attempt == max_retries:
+                        logger.error(f"Final attempt {attempt}/{max_retries} failed for {func.__name__}: {err}")
+                        raise
+                    logger.warning(
+                        f"Attempt {attempt}/{max_retries} failed for {func.__name__}: {err}. "
+                        f"Retrying in {current_delay:.2f}s..."
+                    )
+                    time.sleep(current_delay)
+                    current_delay *= backoff
+        return wrapper
+    return decorator
 
 
-class CryptoAPIHandler:
-    """Handles formatting and validation of cryptocurrency market data payloads."""
+class CryptoApiHandler:
+    """Handles public API requests for market data with built-in retry logic."""
 
-    def __init__(self, base_currency: str = "USD") -> None:
-        """Initialize handler with default fiat base currency.
+    def __init__(self, timeout: int = 10):
+        self.timeout = timeout
 
-        Args:
-            base_currency: Target fiat currency symbol (e.g., USD, EUR).
-        """
-        self.base_currency: str = base_currency.upper()
+    @retry_on_failure(max_retries=3, delay=0.5, backoff=2.0)
+    def fetch_ticker(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch current spot ticker price for a cryptocurrency pair."""
+        endpoint = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol.upper()}"
+        request = urllib.request.Request(endpoint, headers={"User-Agent": "crypto-tracker/1.0"})
 
-    def parse_ticker_response(
-        self, raw_data: Dict[str, Union[str, float, int]]
-    ) -> Dict[str, Union[str, float]]:
-        """Extract standard price metrics from raw exchange API response.
-
-        Args:
-            raw_data: Dictionary containing raw payload from crypto exchange API.
-
-        Returns:
-            Normalized ticker dictionary with price and 24h change data.
-        """
-        symbol: str = str(raw_data.get("symbol", "UNKNOWN")).upper()
-        price: float = float(raw_data.get("lastPrice", 0.0))
-        change_24h: float = float(raw_data.get("priceChangePercent", 0.0))
-
-        return {
-            "symbol": symbol,
-            "price": price,
-            "currency": self.base_currency,
-            "change_24h": change_24h,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-
-    def calculate_portfolio_value(
-        self,
-        holdings: Dict[str, float],
-        prices: Dict[str, float],
-    ) -> Dict[str, float]:
-        """Calculate current total value and individual token values.
-
-        Args:
-            holdings: Map of crypto token symbols to token quantity.
-            prices: Map of crypto token symbols to current unit prices.
-
-        Returns:
-            Dictionary containing total value and individual asset values.
-        """
-        total_value: float = 0.0
-        breakdown: Dict[str, float] = {}
-
-        for symbol, amount in holdings.items():
-            unit_price: float = prices.get(symbol.upper(), 0.0)
-            asset_val: float = amount * unit_price
-            breakdown[symbol.upper()] = round(asset_val, 2)
-            total_value += asset_val
-
-        breakdown["total_value"] = round(total_value, 2)
-        return breakdown
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            if response.status == 200:
+                payload = json.loads(response.read().decode("utf-8"))
+                return {
+                    "symbol": payload.get("symbol"),
+                    "price": float(payload.get("price", 0.0))
+                }
+        return None

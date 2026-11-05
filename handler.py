@@ -1,58 +1,61 @@
-import time
-import json
 import logging
-import urllib.request
-import urllib.error
-from functools import wraps
-from typing import Callable, Any, Dict, Optional, Tuple
+from decimal import Decimal, InvalidOperation
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-def retry_on_failure(
-    max_retries: int = 3,
-    delay: float = 1.0,
-    backoff: float = 2.0,
-    exceptions: Tuple[type, ...] = (urllib.error.URLError, TimeoutError, OSError)
-) -> Callable:
-    """Decorator that retries a network operation with exponential backoff."""
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            current_delay = delay
-            for attempt in range(1, max_retries + 1):
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as err:
-                    if attempt == max_retries:
-                        logger.error(f"Final attempt {attempt}/{max_retries} failed for {func.__name__}: {err}")
-                        raise
-                    logger.warning(
-                        f"Attempt {attempt}/{max_retries} failed for {func.__name__}: {err}. "
-                        f"Retrying in {current_delay:.2f}s..."
-                    )
-                    time.sleep(current_delay)
-                    current_delay *= backoff
-        return wrapper
-    return decorator
+
+def safe_decimal(val: Any, default: Optional[Decimal] = None) -> Optional[Decimal]:
+    """Safely convert arbitrary values to Decimal handling edge case types."""
+    if val is None or val == "":
+        return default
+    try:
+        str_val = str(val).strip()
+        return Decimal(str_val)
+    except (InvalidOperation, ValueError, TypeError) as err:
+        logger.warning(f"Failed to convert {val!r} to Decimal: {err}")
+        return default
 
 
-class CryptoApiHandler:
-    """Handles public API requests for market data with built-in retry logic."""
+def calculate_price_change(current_price: Any, previous_price: Any) -> Optional[Decimal]:
+    """Calculate percentage price change safely handling zero or invalid inputs."""
+    curr = safe_decimal(current_price)
+    prev = safe_decimal(previous_price)
 
-    def __init__(self, timeout: int = 10):
-        self.timeout = timeout
-
-    @retry_on_failure(max_retries=3, delay=0.5, backoff=2.0)
-    def fetch_ticker(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Fetch current spot ticker price for a cryptocurrency pair."""
-        endpoint = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol.upper()}"
-        request = urllib.request.Request(endpoint, headers={"User-Agent": "crypto-tracker/1.0"})
-
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            if response.status == 200:
-                payload = json.loads(response.read().decode("utf-8"))
-                return {
-                    "symbol": payload.get("symbol"),
-                    "price": float(payload.get("price", 0.0))
-                }
+    if curr is None or prev is None:
+        logger.error("Cannot calculate change: missing price data")
         return None
+
+    if prev <= Decimal("0"):
+        logger.warning(f"Invalid previous price for calculation: {prev}")
+        return None
+
+    try:
+        change = ((curr - prev) / prev) * Decimal("100")
+        return change.quantize(Decimal("0.01"))
+    except Exception as exc:
+        logger.error(f"Unexpected error calculating price change: {exc}")
+        return None
+
+
+def extract_ticker_data(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract and sanitize crypto ticker payload with edge-case handling."""
+    if not isinstance(payload, dict) or not payload:
+        logger.warning("Empty or non-dict payload received")
+        return {"symbol": "UNKNOWN", "price": None, "volume_24h": None, "valid": False}
+
+    symbol = str(payload.get("symbol", "UNKNOWN")).upper().strip()
+    raw_price = payload.get("price") or payload.get("last_price")
+    raw_volume = payload.get("volume_24h") or payload.get("vol_24h")
+
+    price = safe_decimal(raw_price)
+    volume = safe_decimal(raw_volume)
+
+    is_valid = price is not None and price > Decimal("0") and bool(symbol != "UNKNOWN")
+
+    return {
+        "symbol": symbol,
+        "price": price,
+        "volume_24h": volume if (volume is not None and volume >= Decimal("0")) else Decimal("0"),
+        "valid": is_valid,
+    }

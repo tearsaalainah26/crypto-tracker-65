@@ -1,42 +1,39 @@
-"""Constants and configuration defaults for crypto-tracker-65."""
+import logging
+from typing import Final, Dict
 
-from typing import Dict, List, Final
+# performance-critical constants cached for memory efficiency
 
-# Base API Endpoints
-COINGECKO_BASE_URL: Final[str] = "https://api.coingecko.com/api/v3"
-BINANCE_BASE_URL: Final[str] = "https://api.binance.com/api/v3"
+CACHE_TTL_SECONDS: Final[int] = 300
+API_RATE_LIMIT_PER_MINUTE: Final[int] = 60
 
-# Default Tracking Parameters
-DEFAULT_CURRENCY: Final[str] = "usd"
-DEFAULT_REFRESH_INTERVAL_SECONDS: Final[int] = 30
-MAX_RETRIES: Final[int] = 3
-REQUEST_TIMEOUT_SECONDS: Final[int] = 10
-
-# Supported Cryptocurrency Identifiers
-TOP_TRACKED_ASSETS: Final[List[str]] = [
-    "bitcoin",
-    "ethereum",
-    "solana",
-    "cardano",
-    "ripple",
-    "polkadot",
-    "avalanche-2",
-]
-
-# Market Data Display Preferences
-PRICE_DECIMAL_PLACES: Final[Dict[str, int]] = {
-    "usd": 2,
-    "eur": 2,
-    "gbp": 2,
-    "btc": 6,
-    "eth": 4,
+# mapping of crypto pairs to internal processing IDs
+# dictionary lookups provide o(1) performance
+SYMBOL_MAP: Final[Dict[str, int]] = {
+    "BTC/USD": 1,
+    "ETH/USD": 2,
+    "SOL/USD": 3,
+    "ADA/USD": 4,
+    "DOT/USD": 5,
+    "MATIC/USD": 6,
+    "LINK/USD": 7,
+    "XRP/USD": 8,
+    "DOGE/USD": 9,
+    "AVAX/USD": 10
 }
 
-# Cache Duration Settings
-CACHE_TTL_PRICES: Final[int] = 15  # seconds
-CACHE_TTL_METADATA: Final[int] = 3600  # 1 hour
+# internal worker thread configurations
+MAX_WORKER_THREADS: Final[int] = 8
+BATCH_SIZE: Final[int] = 100
 
-# Status Identifiers
-STATUS_OK: Final[str] = "OK"
-STATUS_ERROR: Final[str] = "ERROR"
-STATUS_STALE: Final[str] = "STALE"
+def get_logger(name: str) -> logging.Logger:
+    """standardized logger instance configuration"""
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+    return logger

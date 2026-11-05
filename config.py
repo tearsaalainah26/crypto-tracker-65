@@ -1,36 +1,63 @@
+import json
 import os
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any, Dict
 
-class Config:
-    """Configuration settings for crypto-tracker-65 application."""
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "api_base_url": "https://api.coingecko.com/api/v3",
+    "request_timeout_seconds": 10,
+    "update_interval_seconds": 60,
+    "tracked_assets": ["bitcoin", "ethereum", "solana"],
+    "currency": "usd",
+    "alert_thresholds": {
+        "price_change_percent_24h": 5.0,
+        "enable_email_alerts": False,
+    },
+    "log_level": "INFO",
+}
 
-    def __init__(self) -> None:
-        self.api_key: str = os.getenv("CRYPTO_API_KEY", "default_key")
-        self.base_url: str = "https://api.coingecko.com/api/v3"
-        self.request_timeout: int = 30
-        self.refresh_interval: int = 60
 
-    def get_headers(self) -> Dict[str, str]:
-        """Return authentication headers for API requests."""
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+class ConfigLoader:
+    """Handles loading and merging application configuration for crypto-tracker."""
 
-    @classmethod
-    def validate_env(cls) -> bool:
-        """Ensure required environment variables are present."""
-        required_vars: list[str] = ["CRYPTO_API_KEY"]
-        return all(os.getenv(var) is not None for var in required_vars)
+    def __init__(self, config_path: str = "config.json"):
+        self.config_path = Path(config_path)
+        self.config: Dict[str, Any] = DEFAULT_CONFIG.copy()
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Export configuration as a dictionary."""
-        return {
-            "api_key": self.api_key,
-            "base_url": self.base_url,
-            "timeout": self.request_timeout,
-            "interval": self.refresh_interval
-        }
+    def load_config(self) -> Dict[str, Any]:
+        """Loads configuration from file and env vars, falling back to defaults."""
+        merged_config = DEFAULT_CONFIG.copy()
 
-app_config: Config = Config()
+        if self.config_path.exists():
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    file_data = json.load(f)
+                    self._deep_update(merged_config, file_data)
+            except (json.JSONDecodeError, IOError) as err:
+                print(f"Warning: Failed to parse {self.config_path} ({err}). Using defaults.")
+
+        if env_currency := os.getenv("CRYPTO_CURRENCY"):
+            merged_config["currency"] = env_currency.lower()
+
+        if env_interval := os.getenv("UPDATE_INTERVAL"):
+            try:
+                merged_config["update_interval_seconds"] = int(env_interval)
+            except ValueError:
+                pass
+
+        self.config = merged_config
+        return self.config
+
+    def _deep_update(self, original: Dict[str, Any], update: Dict[str, Any]) -> None:
+        """Recursively update nested dictionary configuration."""
+        for key, value in update.items():
+            if isinstance(value, dict) and key in original and isinstance(original[key], dict):
+                self._deep_update(original[key], value)
+            else:
+                original[key] = value
+
+
+def get_config(config_path: str = "config.json") -> Dict[str, Any]:
+    """Utility helper to load and retrieve configuration dictionary."""
+    loader = ConfigLoader(config_path)
+    return loader.load_config()

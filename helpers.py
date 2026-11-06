@@ -1,49 +1,25 @@
-"""Utility functions for formatting and calculating cryptocurrency market data."""
+import decimal
+from typing import Union
 
-from typing import Dict, List, Optional, Union
+def format_crypto_amount(amount: Union[float, str, decimal.Decimal], precision: int = 8) -> str:
+    """Normalize crypto amounts to string with fixed precision."""
+    val = decimal.Decimal(str(amount))
+    return f"{val:.{precision}f}"
 
+def calculate_percentage_change(current: float, previous: float) -> float:
+    """Calculate percentage difference between two price points."""
+    if previous == 0:
+        return 0.0
+    return ((current - previous) / previous) * 100
 
-def format_currency(value: Union[int, float], currency_symbol: str = "$") -> str:
-    """Format numerical value into readable currency string with smart precision."""
-    if value is None:
-        return "N/A"
-    
-    abs_val = abs(value)
-    if abs_val >= 1_000_000_000:
-        return f"{currency_symbol}{value / 1_000_000_000:.2f}B"
-    elif abs_val >= 1_000_000:
-        return f"{currency_symbol}{value / 1_000_000:.2f}M"
-    elif abs_val >= 1_000:
-        return f"{currency_symbol}{value:,.2f}"
-    elif abs_val < 0.01:
-        return f"{currency_symbol}{value:.6f}"
-    else:
-        return f"{currency_symbol}{value:.2f}"
+def sanitize_symbol(symbol: str) -> str:
+    """Ensure symbol is uppercase and strip whitespace."""
+    return symbol.strip().upper()
 
+def get_ticker_pair(base: str, quote: str = "USDT") -> str:
+    """Combine base and quote currencies into standard format."""
+    return f"{sanitize_symbol(base)}/{sanitize_symbol(quote)}"
 
-def calculate_price_change(current_price: float, past_price: float) -> Optional[float]:
-    """Calculate percentage price change between two price points."""
-    if not past_price or past_price <= 0:
-        return None
-    return ((current_price - past_price) / past_price) * 100.0
-
-
-def normalize_ticker(symbol: str) -> str:
-    """Sanitize and standardize crypto ticker symbol format."""
-    if not symbol:
-        return ""
-    cleaned = symbol.strip().upper().replace("/", "").replace("-", "")
-    return cleaned
-
-
-def calculate_simple_moving_average(prices: List[float], period: int = 14) -> List[Optional[float]]:
-    """Calculate Simple Moving Average (SMA) over a list of historical prices."""
-    if len(prices) < period or period <= 0:
-        return [None] * len(prices)
-
-    sma_values: List[Optional[float]] = [None] * (period - 1)
-    for i in range(period - 1, len(prices)):
-        window = prices[i - period + 1 : i + 1]
-        sma_values.append(sum(window) / period)
-
-    return sma_values
+def is_valid_price(price: float) -> bool:
+    """Check if price is a valid positive number."""
+    return isinstance(price, (int, float)) and price > 0

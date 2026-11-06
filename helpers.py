@@ -1,21 +1,31 @@
-import decimal
-import datetime
-from typing import Union
+import time
+import logging
+from functools import wraps
 
-def format_crypto_amount(value: Union[str, float, int], precision: int = 8) -> decimal.Decimal:
-    """Converts raw input to a high-precision decimal for ledger accuracy."""
-    return decimal.Decimal(str(value)).quantize(decimal.Decimal('1.' + '0' * precision))
+logger = logging.getLogger(__name__)
 
-def get_timestamp_iso() -> str:
-    """Returns current UTC timestamp in ISO 8601 format for database logs."""
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+def with_retry(retries=3, delay=2, exceptions=(Exception,)):
+    """Decorator to retry network operations with exponential backoff."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            attempt = 0
+            current_delay = delay
+            while attempt < retries:
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    attempt += 1
+                    if attempt == retries:
+                        logger.error(f"Final attempt failed for {func.__name__}: {e}")
+                        raise
+                    
+                    logger.warning(f"Retry {attempt}/{retries} for {func.__name__} after error: {e}")
+                    time.sleep(current_delay)
+                    current_delay *= 2
+        return wrapper
+    return decorator
 
-def calculate_profit_margin(buy_price: float, sell_price: float) -> float:
-    """Calculates percentage difference between entry and exit prices."""
-    if buy_price <= 0:
-        return 0.0
-    return ((sell_price - buy_price) / buy_price) * 100
-
-def validate_ticker_symbol(symbol: str) -> bool:
-    """Checks if ticker matches standard uppercase crypto naming convention."""
-    return symbol.isupper() and 2 <= len(symbol) <= 6 and symbol.isalpha()
+def format_crypto_price(price: float) -> str:
+    """Utility to standardize cryptocurrency price string representation."""
+    return f"${price:,.2f}"

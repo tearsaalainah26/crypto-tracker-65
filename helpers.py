@@ -1,25 +1,21 @@
 import decimal
+import datetime
 from typing import Union
 
-def format_crypto_amount(amount: Union[float, str, decimal.Decimal], precision: int = 8) -> str:
-    """Normalize crypto amounts to string with fixed precision."""
-    val = decimal.Decimal(str(amount))
-    return f"{val:.{precision}f}"
+def format_crypto_amount(value: Union[str, float, int], precision: int = 8) -> decimal.Decimal:
+    """Converts raw input to a high-precision decimal for ledger accuracy."""
+    return decimal.Decimal(str(value)).quantize(decimal.Decimal('1.' + '0' * precision))
 
-def calculate_percentage_change(current: float, previous: float) -> float:
-    """Calculate percentage difference between two price points."""
-    if previous == 0:
+def get_timestamp_iso() -> str:
+    """Returns current UTC timestamp in ISO 8601 format for database logs."""
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+def calculate_profit_margin(buy_price: float, sell_price: float) -> float:
+    """Calculates percentage difference between entry and exit prices."""
+    if buy_price <= 0:
         return 0.0
-    return ((current - previous) / previous) * 100
+    return ((sell_price - buy_price) / buy_price) * 100
 
-def sanitize_symbol(symbol: str) -> str:
-    """Ensure symbol is uppercase and strip whitespace."""
-    return symbol.strip().upper()
-
-def get_ticker_pair(base: str, quote: str = "USDT") -> str:
-    """Combine base and quote currencies into standard format."""
-    return f"{sanitize_symbol(base)}/{sanitize_symbol(quote)}"
-
-def is_valid_price(price: float) -> bool:
-    """Check if price is a valid positive number."""
-    return isinstance(price, (int, float)) and price > 0
+def validate_ticker_symbol(symbol: str) -> bool:
+    """Checks if ticker matches standard uppercase crypto naming convention."""
+    return symbol.isupper() and 2 <= len(symbol) <= 6 and symbol.isalpha()

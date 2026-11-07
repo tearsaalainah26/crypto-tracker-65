@@ -1,53 +1,71 @@
-from typing import Any, Dict, List, Optional
+import time
+from typing import Dict, List, Optional
+from functools import lru_cache
+from dataclasses import dataclass
 
 
-def calculate_vwap(trades: List[Dict[str, float]]) -> Optional[float]:
-    """Calculate Volume-Weighted Average Price (VWAP) from trade execution records."""
-    if not trades:
-        return None
-
-    total_volume = sum(trade.get("volume", 0.0) for trade in trades)
-    if total_volume <= 0:
-        return None
-
-    total_pv = sum(
-        trade.get("price", 0.0) * trade.get("volume", 0.0) for trade in trades
-    )
-    return round(total_pv / total_volume, 8)
+@dataclass
+class TickerData:
+    symbol: str
+    price: float
+    volume: float
+    timestamp: float
 
 
-def normalize_ticker_data(raw_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalize multi-exchange raw ticker payload into standard layout."""
-    symbol = str(raw_data.get("symbol", "")).upper().replace("-", "").replace("_", "")
-    last_price = float(raw_data.get("last_price", raw_data.get("price", 0.0)))
-    volume_24h = float(raw_data.get("volume_24h", raw_data.get("volume", 0.0)))
-    high_24h = float(raw_data.get("high_24h", raw_data.get("high", last_price)))
-    low_24h = float(raw_data.get("low_24h", raw_data.get("low", last_price)))
+class CryptoEngine:
+    """Core processing engine for real-time crypto market metrics."""
 
-    open_price = float(raw_data.get("open_price", raw_data.get("open", 0.0)))
-    price_change_pct = 0.0
-    if open_price > 0:
-        price_change_pct = round(((last_price - open_price) / open_price) * 100, 2)
+    def __init__(self, max_history: int = 1000):
+        self.max_history = max_history
+        self._price_history: Dict[str, List[float]] = {}
+        self._volume_history: Dict[str, List[float]] = {}
 
-    return {
-        "symbol": symbol,
-        "last_price": last_price,
-        "open_price": open_price,
-        "high_24h": high_24h,
-        "low_24h": low_24h,
-        "volume_24h": volume_24h,
-        "price_change_pct_24h": price_change_pct,
-    }
+    def ingest_ticker(self, ticker: TickerData) -> None:
+        """Ingest new ticker update and clear relevant cache entries."""
+        symbol = ticker.symbol.upper()
+        if symbol not in self._price_history:
+            self._price_history[symbol] = []
+            self._volume_history[symbol] = []
 
+        prices = self._price_history[symbol]
+        volumes = self._volume_history[symbol]
 
-def format_market_cap(usd_value: float) -> str:
-    """Format large USD market cap values into human-readable strings."""
-    if usd_value >= 1e12:
-        return f"${usd_value / 1e12:.2f}T"
-    if usd_value >= 1e9:
-        return f"${usd_value / 1e9:.2f}B"
-    if usd_value >= 1e6:
-        return f"${usd_value / 1e6:.2f}M"
-    if usd_value >= 1e3:
-        return f"${usd_value / 1e3:.2f}K"
-    return f"${usd_value:.2f}"
+        prices.append(ticker.price)
+        volumes.append(ticker.volume)
+
+        # Maintain sliding window history size limit
+        if len(prices) > self.max_history:
+            prices.pop(0)
+            volumes.pop(0)
+
+        # Invalidate cached calculation for updated symbol
+        self.get_moving_average.cache_clear()
+
+    @lru_cache(maxsize=128)
+    def get_moving_average(self, symbol: str, window: int) -> Optional[float]:
+        """Calculates simple moving average using cached lookup."""
+        prices = self._price_history.get(symbol.upper(), [])
+        if not prices or len(prices) < window:
+            return None
+
+        # Slice latest window values and compute mean
+        sub_series = prices[-window:]
+        return sum(sub_series) / window
+
+    def calculate_batch_volatility(self, symbols: List[str], window: int) -> Dict[str, float]:
+        """Compute relative standard deviation across multiple assets in a single pass."""
+        results = {}
+        for symbol in symbols:
+            sym_upper = symbol.upper()
+            prices = self._price_history.get(sym_upper, [])
+            if len(prices) < window:
+                continue
+
+            slice_prices = prices[-window:]
+            mean = sum(slice_prices) / window
+            variance = sum((x - mean) ** 2 for x in slice_prices) / window
+            std_dev = variance ** 0.5
+
+            results[sym_upper] = round(std_dev / mean, 6) if mean != 0 else 0.0
+
+        return results

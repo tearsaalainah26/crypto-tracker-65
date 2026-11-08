@@ -1,31 +1,29 @@
-from functools import lru_cache
 import re
+from typing import Any, Optional
 
-# Compiled regex patterns for performance optimization
-SYMBOL_PATTERN = re.compile(r'^[A-Z]{2,10}$')
+# crypto-tracker-65 validation constants
+ADDRESS_PATTERN = re.compile(r'^[a-zA-Z0-9]{26,42}$')
+SUPPORTED_ASSETS = {'BTC', 'ETH', 'SOL', 'DOT', 'ADA'}
 
-@lru_cache(maxsize=128)
-def is_valid_symbol(symbol: str) -> bool:
-    """Validates crypto ticker format with cached results."""
-    if not isinstance(symbol, str):
-        return False
-    return bool(SYMBOL_PATTERN.match(symbol.strip().upper()))
+def validate_wallet_address(address: str) -> bool:
+    """verify crypto wallet address format"""
+    return bool(ADDRESS_PATTERN.match(address))
 
-def validate_batch(symbols: list[str]) -> list[str]:
-    """Filters a list of symbols for valid formats."""
-    return [s for s in symbols if is_valid_symbol(s)]
+def validate_ticker(ticker: str) -> bool:
+    """check ticker against supported assets list"""
+    return ticker.upper() in SUPPORTED_ASSETS
 
-class DataValidator:
-    """Core validation service for price feed updates."""
-    
-    @staticmethod
-    def validate_price(price: float) -> bool:
-        """Ensures price data is within non-negative bounds."""
-        return isinstance(price, (int, float)) and price >= 0
+def validate_price_input(value: Any) -> float:
+    """sanitization of float values from inputs"""
+    try:
+        price = float(value)
+        if price < 0:
+            raise ValueError('negative price provided')
+        return price
+    except (TypeError, ValueError):
+        return 0.0
 
-    def process_payload(self, data: dict) -> dict:
-        """Sanitizes incoming ticker payload dictionary."""
-        return {
-            k: v for k, v in data.items() 
-            if is_valid_symbol(k) and self.validate_price(v)
-        }
+def sanitize_payload(data: dict) -> dict:
+    """filter incoming dictionary keys"""
+    allowed = {'symbol', 'amount', 'timestamp'}
+    return {k: v for k, v in data.items() if k in allowed}

@@ -1,63 +1,34 @@
-import json
 import os
-from pathlib import Path
+import json
 from typing import Any, Dict
 
-DEFAULT_CONFIG: Dict[str, Any] = {
-    "api_base_url": "https://api.coingecko.com/api/v3",
-    "request_timeout_seconds": 10,
-    "update_interval_seconds": 60,
-    "tracked_assets": ["bitcoin", "ethereum", "solana"],
-    "currency": "usd",
-    "alert_thresholds": {
-        "price_change_percent_24h": 5.0,
-        "enable_email_alerts": False,
-    },
+DEFAULT_CONFIG = {
+    "api_base_url": "https://api.crypto.com/v1",
+    "refresh_interval": 60,
     "log_level": "INFO",
+    "tracked_assets": ["BTC", "ETH"]
 }
 
+def load_config(config_path: str = "config.json") -> Dict[str, Any]:
+    """Loads configuration from disk or returns default values."""
+    config = DEFAULT_CONFIG.copy()
 
-class ConfigLoader:
-    """Handles loading and merging application configuration for crypto-tracker."""
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                user_config = json.load(f)
+                config.update(user_config)
+        except (json.JSONDecodeError, IOError):
+            pass
 
-    def __init__(self, config_path: str = "config.json"):
-        self.config_path = Path(config_path)
-        self.config: Dict[str, Any] = DEFAULT_CONFIG.copy()
+    return config
 
-    def load_config(self) -> Dict[str, Any]:
-        """Loads configuration from file and env vars, falling back to defaults."""
-        merged_config = DEFAULT_CONFIG.copy()
+def get_setting(key: str, default: Any = None) -> Any:
+    """Helper to retrieve a single setting from the current config."""
+    config = load_config()
+    return config.get(key, default)
 
-        if self.config_path.exists():
-            try:
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    file_data = json.load(f)
-                    self._deep_update(merged_config, file_data)
-            except (json.JSONDecodeError, IOError) as err:
-                print(f"Warning: Failed to parse {self.config_path} ({err}). Using defaults.")
-
-        if env_currency := os.getenv("CRYPTO_CURRENCY"):
-            merged_config["currency"] = env_currency.lower()
-
-        if env_interval := os.getenv("UPDATE_INTERVAL"):
-            try:
-                merged_config["update_interval_seconds"] = int(env_interval)
-            except ValueError:
-                pass
-
-        self.config = merged_config
-        return self.config
-
-    def _deep_update(self, original: Dict[str, Any], update: Dict[str, Any]) -> None:
-        """Recursively update nested dictionary configuration."""
-        for key, value in update.items():
-            if isinstance(value, dict) and key in original and isinstance(original[key], dict):
-                self._deep_update(original[key], value)
-            else:
-                original[key] = value
-
-
-def get_config(config_path: str = "config.json") -> Dict[str, Any]:
-    """Utility helper to load and retrieve configuration dictionary."""
-    loader = ConfigLoader(config_path)
-    return loader.load_config()
+if __name__ == "__main__":
+    # Example usage for crypto-tracker-65
+    current_cfg = load_config()
+    print(f"Active assets: {current_cfg['tracked_assets']}")

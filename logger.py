@@ -1,36 +1,36 @@
 import logging
+import sys
 from logging.handlers import RotatingFileHandler
-import os
 
-def setup_logger(name: str = 'crypto-tracker-65', log_file: str = 'crypto.log') -> logging.Logger:
-    """
-    Configures a rotating file logger for the crypto-tracker application.
-    Logs up to 5MB per file with a backup of 3 files.
-    """
+def get_logger(name: str) -> logging.Logger:
+    """Initializes a standard logger for the crypto-tracker-65 application."""
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 
-    # Prevent duplicate handlers if setup is called multiple times
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 
-        # 5MB per file, keep 3 backups
-        handler = RotatingFileHandler(
-            log_file, 
-            maxBytes=5 * 1024 * 1024, 
-            backupCount=3
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
-        # Add console output for development visibility
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+    # Rotating file handler (max 5MB per file, keep 3 backups)
+    file_handler = RotatingFileHandler(
+        'crypto_tracker.log', 
+        maxBytes=5*1024*1024, 
+        backupCount=3
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
     return logger
 
-# Instantiate standard application logger
-crypto_logger = setup_logger()
+def log_trade_event(logger: logging.Logger, symbol: str, action: str, price: float) -> None:
+    """Logs specific crypto trading events with formatted data."""
+    logger.info(f"Trade event: {action.upper()} {symbol} at ${price:,.2f}")
+
+def log_error(logger: logging.Logger, error: Exception) -> None:
+    """Logs exception details for debugging purposes."""
+    logger.error(f"Application error encountered: {str(error)}", exc_info=True)

@@ -1,34 +1,33 @@
 import os
-import json
-from typing import Any, Dict
+from functools import lru_cache
 
-DEFAULT_CONFIG = {
-    "api_base_url": "https://api.crypto.com/v1",
-    "refresh_interval": 60,
-    "log_level": "INFO",
-    "tracked_assets": ["BTC", "ETH"]
-}
+class Settings:
+    """
+    Configuration management with cached lookups for
+    performance-critical settings in crypto-tracker-65.
+    """
+    def __init__(self):
+        self.env = os.getenv("APP_ENV", "production")
+        self.api_key = os.getenv("CRYPTO_API_KEY", "")
+        self.rate_limit = int(os.getenv("RATE_LIMIT", 100))
 
-def load_config(config_path: str = "config.json") -> Dict[str, Any]:
-    """Loads configuration from disk or returns default values."""
-    config = DEFAULT_CONFIG.copy()
+    @lru_cache(maxsize=32)
+    def get_market_endpoint(self, base_currency: str) -> str:
+        """
+        Cached endpoint resolution to avoid repeated string formatting
+        during high-frequency data ingestion cycles.
+        """
+        endpoints = {
+            "btc": "https://api.exchange.com/v1/ticker/btc",
+            "eth": "https://api.exchange.com/v1/ticker/eth",
+            "sol": "https://api.exchange.com/v1/ticker/sol"
+        }
+        return endpoints.get(base_currency.lower(), "https://api.exchange.com/v1/ticker/default")
 
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r") as f:
-                user_config = json.load(f)
-                config.update(user_config)
-        except (json.JSONDecodeError, IOError):
-            pass
-
-    return config
-
-def get_setting(key: str, default: Any = None) -> Any:
-    """Helper to retrieve a single setting from the current config."""
-    config = load_config()
-    return config.get(key, default)
-
-if __name__ == "__main__":
-    # Example usage for crypto-tracker-65
-    current_cfg = load_config()
-    print(f"Active assets: {current_cfg['tracked_assets']}")
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """
+    Singleton accessor for settings with memoization
+    to eliminate redundant instantiation overhead.
+    """
+    return Settings()

@@ -1,31 +1,35 @@
-import time
 import logging
-from functools import wraps
+from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
-def with_retry(retries=3, delay=2, exceptions=(Exception,)):
-    """Decorator to retry network operations with exponential backoff."""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            attempt = 0
-            current_delay = delay
-            while attempt < retries:
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as e:
-                    attempt += 1
-                    if attempt == retries:
-                        logger.error(f"Final attempt failed for {func.__name__}: {e}")
-                        raise
-                    
-                    logger.warning(f"Retry {attempt}/{retries} for {func.__name__} after error: {e}")
-                    time.sleep(current_delay)
-                    current_delay *= 2
-        return wrapper
-    return decorator
+class CryptoDataError(Exception):
+    """Base exception for crypto-tracker-65 data operations."""
+    pass
 
-def format_crypto_price(price: float) -> str:
-    """Utility to standardize cryptocurrency price string representation."""
-    return f"${price:,.2f}"
+def safe_get_price(data: dict, symbol: str) -> Optional[float]:
+    """Extracts price with validation and error logging."""
+    try:
+        if not isinstance(data, dict):
+            raise ValueError("Response data must be a dictionary")
+        
+        price = data.get('quotes', {}).get(symbol, {}).get('price')
+        
+        if price is None:
+            logger.warning(f"Price not found for {symbol}")
+            return None
+            
+        return float(price)
+    except (ValueError, TypeError, AttributeError) as e:
+        logger.error(f"Data parsing error for {symbol}: {str(e)}")
+        return None
+
+def validate_api_response(response: Any) -> bool:
+    """Ensures API response matches expected structure."""
+    if response is None:
+        return False
+    try:
+        return 'status' in response and response['status'].get('error_code') == 0
+    except Exception as e:
+        logger.critical(f"Malformed API response structure: {str(e)}")
+        return False

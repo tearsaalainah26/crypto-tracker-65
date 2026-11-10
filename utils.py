@@ -1,31 +1,31 @@
 import time
+import functools
 import logging
-from typing import Dict, Any
+import requests
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('crypto-tracker-65')
 
-def format_currency(value: float, symbol: str = "USD") -> str:
-    """Formats float values into human-readable currency strings."""
-    return f"{value:,.2f} {symbol}"
+def retry_request(max_retries=3, delay=2):
+    """Decorator for retrying network operations on failure."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except (requests.exceptions.RequestException, ConnectionError) as e:
+                    last_exception = e
+                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+                    time.sleep(delay)
+            logger.error(f"All {max_retries} retries failed for {func.__name__}")
+            raise last_exception
+        return wrapper
+    return decorator
 
-def rate_limited_request(func, *args, **kwargs):
-    """Retry wrapper with backoff for network instability."""
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            if attempt == max_retries - 1:
-                logger.error(f"Final attempt failed: {e}")
-                raise
-            time.sleep(2 ** attempt)
-
-def sanitize_ticker(ticker: str) -> str:
-    """Ensures crypto ticker formatting."""
-    return ticker.strip().upper().replace("/", "-")
-
-def calculate_delta(current: float, previous: float) -> float:
-    """Computes percentage change between two values."""
-    if previous == 0:
-        return 0.0
-    return ((current - previous) / previous) * 100
+@retry_request(max_retries=3, delay=1)
+def fetch_crypto_price(url):
+    """Example network call using the retry decorator."""
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+    return response.json()

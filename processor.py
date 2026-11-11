@@ -1,36 +1,34 @@
+import functools
+import time
 import logging
-from typing import Optional, Dict, Any
+from typing import Callable, Any
 
-logger = logging.getLogger(__name__)
+# Configure logger for core module performance tracking
+logger = logging.getLogger('crypto-tracker-65.processor')
 
-def process_price_data(data: Optional[Dict[str, Any]]) -> Optional[float]:
-    """Extracts price from raw payload with robust error handling."""
-    try:
-        if not isinstance(data, dict):
-            raise ValueError("Invalid payload format: dictionary expected")
-        
-        price_val = data.get("price")
-        if price_val is None:
-            raise KeyError("Missing mandatory price field in payload")
-        
-        float_price = float(price_val)
-        if float_price < 0:
-            raise ValueError(f"Negative price detected: {float_price}")
-            
-        return float_price
+@functools.lru_cache(maxsize=128)
+def get_normalized_price(symbol: str, price: float) -> float:
+    """Cache normalized price calculations to reduce CPU cycles."""
+    return round(float(price), 8)
 
-    except (ValueError, TypeError) as e:
-        logger.error(f"Data transformation error: {e}")
-        return None
-    except KeyError as e:
-        logger.warning(f"Schema validation failure: {e}")
-        return None
-    except Exception as e:
-        logger.critical(f"Unexpected processor failure: {e}")
-        return None
+def performance_monitor(func: Callable) -> Callable:
+    """Decorator for tracking execution time of critical modules."""
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        duration = time.perf_counter() - start_time
+        if duration > 0.1:
+            logger.debug(f'Slow execution in {func.__name__}: {duration:.4f}s')
+        return result
+    return wrapper
 
-def validate_ticker(ticker: Any) -> str:
-    """Sanitizes and validates crypto ticker strings."""
-    if not isinstance(ticker, str) or not ticker.isalnum():
-        raise ValueError("Invalid ticker format encountered")
-    return ticker.upper().strip()
+@performance_monitor
+def process_batch(data: list[dict]) -> list[float]:
+    """Efficient batch processing of incoming price tickers."""
+    processed = []
+    for entry in data:
+        # Directly map using cached utility
+        val = get_normalized_price(entry.get('s', ''), entry.get('p', 0.0))
+        processed.append(val)
+    return processed

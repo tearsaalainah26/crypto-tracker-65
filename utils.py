@@ -1,31 +1,30 @@
-import time
-import functools
+from typing import Dict, Union, Optional
 import logging
-import requests
 
-logger = logging.getLogger('crypto-tracker-65')
+# Configure logging for crypto-tracker-65
+logger = logging.getLogger(__name__)
 
-def retry_request(max_retries=3, delay=2):
-    """Decorator for retrying network operations on failure."""
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            last_exception = None
-            for attempt in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except (requests.exceptions.RequestException, ConnectionError) as e:
-                    last_exception = e
-                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
-                    time.sleep(delay)
-            logger.error(f"All {max_retries} retries failed for {func.__name__}")
-            raise last_exception
-        return wrapper
-    return decorator
+def format_price(price: float, symbol: str = "USD") -> str:
+    """Formats a float price into a human-readable currency string."""
+    return f"{price:,.2f} {symbol}"
 
-@retry_request(max_retries=3, delay=1)
-def fetch_crypto_price(url):
-    """Example network call using the retry decorator."""
-    response = requests.get(url, timeout=10)
-    response.raise_for_status()
-    return response.json()
+def calculate_percentage_change(current: float, previous: float) -> float:
+    """Calculates percentage change between two price points."""
+    if previous == 0:
+        return 0.0
+    return ((current - previous) / previous) * 100
+
+def validate_ticker(ticker: str) -> bool:
+    """Checks if the provided crypto ticker is alphanumeric and valid length."""
+    return ticker.isalnum() and 2 <= len(ticker) <= 10
+
+def parse_api_response(data: Dict[str, Union[str, float]]) -> Optional[Dict[str, float]]:
+    """Extracts core price data from raw API dictionary response."""
+    try:
+        return {
+            "price": float(data.get("price", 0.0)),
+            "volume": float(data.get("volume", 0.0))
+        }
+    except (ValueError, TypeError) as e:
+        logger.error(f"failed to parse response: {e}")
+        return None

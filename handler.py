@@ -1,61 +1,32 @@
-import logging
-from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, Optional
+from typing import Dict, List, Optional
+import requests
 
-logger = logging.getLogger(__name__)
+class CryptoDataHandler:
+    """Handles retrieval and formatting of cryptocurrency market data."""
 
+    def __init__(self, base_url: str = "https://api.coingecko.com/api/v3") -> None:
+        self.base_url: str = base_url
 
-def safe_decimal(val: Any, default: Optional[Decimal] = None) -> Optional[Decimal]:
-    """Safely convert arbitrary values to Decimal handling edge case types."""
-    if val is None or val == "":
-        return default
-    try:
-        str_val = str(val).strip()
-        return Decimal(str_val)
-    except (InvalidOperation, ValueError, TypeError) as err:
-        logger.warning(f"Failed to convert {val!r} to Decimal: {err}")
-        return default
+    def fetch_price(self, coin_id: str, currency: str = "usd") -> Optional[float]:
+        """Fetches the current price of a specific coin by ID."""
+        url: str = f"{self.base_url}/simple/price"
+        params: Dict[str, str] = {"ids": coin_id, "vs_currencies": currency}
+        
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data: Dict = response.json()
+            return float(data.get(coin_id, {}).get(currency, 0.0))
+        except (requests.RequestException, ValueError, KeyError):
+            return None
 
-
-def calculate_price_change(current_price: Any, previous_price: Any) -> Optional[Decimal]:
-    """Calculate percentage price change safely handling zero or invalid inputs."""
-    curr = safe_decimal(current_price)
-    prev = safe_decimal(previous_price)
-
-    if curr is None or prev is None:
-        logger.error("Cannot calculate change: missing price data")
-        return None
-
-    if prev <= Decimal("0"):
-        logger.warning(f"Invalid previous price for calculation: {prev}")
-        return None
-
-    try:
-        change = ((curr - prev) / prev) * Decimal("100")
-        return change.quantize(Decimal("0.01"))
-    except Exception as exc:
-        logger.error(f"Unexpected error calculating price change: {exc}")
-        return None
-
-
-def extract_ticker_data(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract and sanitize crypto ticker payload with edge-case handling."""
-    if not isinstance(payload, dict) or not payload:
-        logger.warning("Empty or non-dict payload received")
-        return {"symbol": "UNKNOWN", "price": None, "volume_24h": None, "valid": False}
-
-    symbol = str(payload.get("symbol", "UNKNOWN")).upper().strip()
-    raw_price = payload.get("price") or payload.get("last_price")
-    raw_volume = payload.get("volume_24h") or payload.get("vol_24h")
-
-    price = safe_decimal(raw_price)
-    volume = safe_decimal(raw_volume)
-
-    is_valid = price is not None and price > Decimal("0") and bool(symbol != "UNKNOWN")
-
-    return {
-        "symbol": symbol,
-        "price": price,
-        "volume_24h": volume if (volume is not None and volume >= Decimal("0")) else Decimal("0"),
-        "valid": is_valid,
-    }
+    def get_supported_coins(self) -> List[str]:
+        """Returns a list of coin IDs supported by the API."""
+        url: str = f"{self.base_url}/coins/list"
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data: List[Dict[str, str]] = response.json()
+            return [coin["id"] for coin in data if "id" in coin]
+        except requests.RequestException:
+            return []

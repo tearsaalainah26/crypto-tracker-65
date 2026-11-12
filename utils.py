@@ -1,30 +1,29 @@
-from typing import Dict, Union, Optional
-import logging
+import time
+import decimal
+from typing import Union
 
-# Configure logging for crypto-tracker-65
-logger = logging.getLogger(__name__)
+def format_currency(value: Union[float, str, decimal.Decimal], precision: int = 8) -> str:
+    """Format crypto values to a consistent decimal string."""
+    val = decimal.Decimal(str(value))
+    return f"{val:.{precision}f}".rstrip('0').rstrip('.')
 
-def format_price(price: float, symbol: str = "USD") -> str:
-    """Formats a float price into a human-readable currency string."""
-    return f"{price:,.2f} {symbol}"
+def get_timestamp() -> int:
+    """Return current Unix epoch time."""
+    return int(time.time())
 
 def calculate_percentage_change(current: float, previous: float) -> float:
-    """Calculates percentage change between two price points."""
+    """Calculate price percentage movement."""
     if previous == 0:
         return 0.0
     return ((current - previous) / previous) * 100
 
-def validate_ticker(ticker: str) -> bool:
-    """Checks if the provided crypto ticker is alphanumeric and valid length."""
-    return ticker.isalnum() and 2 <= len(ticker) <= 10
-
-def parse_api_response(data: Dict[str, Union[str, float]]) -> Optional[Dict[str, float]]:
-    """Extracts core price data from raw API dictionary response."""
-    try:
-        return {
-            "price": float(data.get("price", 0.0)),
-            "volume": float(data.get("volume", 0.0))
-        }
-    except (ValueError, TypeError) as e:
-        logger.error(f"failed to parse response: {e}")
-        return None
+def retry_operation(func, retries: int = 3, delay: int = 2):
+    """Execute function with simple retry logic."""
+    last_ex = None
+    for i in range(retries):
+        try:
+            return func()
+        except Exception as e:
+            last_ex = e
+            time.sleep(delay)
+    raise last_ex

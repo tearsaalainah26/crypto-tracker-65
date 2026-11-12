@@ -1,39 +1,25 @@
-import logging
-from typing import Final, Dict
+import enum
+from typing import Final
 
-# performance-critical constants cached for memory efficiency
+# Configuration for crypto-tracker-65 performance optimization
+# Using tuple collections for constant time lookups instead of lists
 
-CACHE_TTL_SECONDS: Final[int] = 300
-API_RATE_LIMIT_PER_MINUTE: Final[int] = 60
+SUPPORTED_ASSETS: Final[tuple[str, ...]] = (
+    "BTC", "ETH", "SOL", "ADA", "DOT", "MATIC", "LINK"
+)
 
-# mapping of crypto pairs to internal processing IDs
-# dictionary lookups provide o(1) performance
-SYMBOL_MAP: Final[Dict[str, int]] = {
-    "BTC/USD": 1,
-    "ETH/USD": 2,
-    "SOL/USD": 3,
-    "ADA/USD": 4,
-    "DOT/USD": 5,
-    "MATIC/USD": 6,
-    "LINK/USD": 7,
-    "XRP/USD": 8,
-    "DOGE/USD": 9,
-    "AVAX/USD": 10
-}
+API_RATE_LIMIT_DELAY: Final[float] = 0.5
+CACHE_EXPIRATION_SECONDS: Final[int] = 300
 
-# internal worker thread configurations
-MAX_WORKER_THREADS: Final[int] = 8
-BATCH_SIZE: Final[int] = 100
+class ExchangeEndpoints(enum.Enum):
+    COINGECKO = "https://api.coingecko.com/api/v3"
+    BINANCE = "https://api.binance.com/api/v3"
 
-def get_logger(name: str) -> logging.Logger:
-    """standardized logger instance configuration"""
-    logger = logging.getLogger(name)
-    if not logger.handlers:
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-    return logger
+# Pre-computed regex patterns to reduce initialization overhead during processing loops
+import re
+
+ASSET_VALIDATION_PATTERN: Final[re.Pattern] = re.compile(r"^[A-Z]{2,5}$")
+
+def get_asset_list() -> tuple[str, ...]:
+    """Return the immutable tuple of supported assets."""
+    return SUPPORTED_ASSETS

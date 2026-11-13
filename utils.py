@@ -1,29 +1,38 @@
+import logging
 import time
-import decimal
-from typing import Union
+from functools import wraps
+from typing import Any, Callable, Tuple, Type
 
-def format_currency(value: Union[float, str, decimal.Decimal], precision: int = 8) -> str:
-    """Format crypto values to a consistent decimal string."""
-    val = decimal.Decimal(str(value))
-    return f"{val:.{precision}f}".rstrip('0').rstrip('.')
+logger = logging.getLogger(__name__)
 
-def get_timestamp() -> int:
-    """Return current Unix epoch time."""
-    return int(time.time())
 
-def calculate_percentage_change(current: float, previous: float) -> float:
-    """Calculate price percentage movement."""
-    if previous == 0:
-        return 0.0
-    return ((current - previous) / previous) * 100
-
-def retry_operation(func, retries: int = 3, delay: int = 2):
-    """Execute function with simple retry logic."""
-    last_ex = None
-    for i in range(retries):
-        try:
-            return func()
-        except Exception as e:
-            last_ex = e
-            time.sleep(delay)
-    raise last_ex
+def retry_network_op(
+    max_retries: int = 3,
+    backoff_factor: float = 1.5,
+    exceptions: Tuple[Type[Exception], ...] = (Exception,)
+) -> Callable:
+    """Decorator that retries network calls with exponential backoff for crypto APIs."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            delay = 1.0
+            for attempt in range(1, max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as err:
+                    if attempt == max_retries:
+                        logger.error(
+                            "Network operation '%s' failed after %d attempts: %s",
+                            func.__name__, max_retries, err
+                        )
+                        raise err
+                    
+                    logger.warning(
+                        "Attempt %d/%d for '%s' failed (%s). Retrying in %.1fs...",
+                        attempt, max_retries, func.__name__, err, delay
+                    )
+                    time.sleep(delay)
+                    delay *= backoff_factor
+            return None
+        return wrapper
+    return decorator

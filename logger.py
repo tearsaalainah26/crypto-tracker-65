@@ -1,36 +1,27 @@
 import logging
-from logging.handlers import RotatingFileHandler
-import os
+import sys
+from typing import Any
 
-def setup_logger(name: str, log_file: str = "crypto_tracker.log", level=logging.INFO):
-    """
-    Configures a rotating file logger for crypto-tracker-65 components.
-    Maintains up to 5 files of 5MB each.
-    """
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
+# Configure crypto-tracker-65 logging infrastructure
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 
-    # Prevent duplicate handlers if logger is re-initialized
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
+logger = logging.getLogger('crypto-tracker-65')
 
-        # File rotation setup
-        handler = RotatingFileHandler(
-            log_file, 
-            maxBytes=5*1024*1024, 
-            backupCount=5
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+def log_error(exception: Exception, context: str = "") -> None:
+    """Logs edge case exceptions with stack trace information."""
+    error_msg = f"Error in {context}: {str(exception)}" if context else str(exception)
+    
+    if isinstance(exception, (ConnectionError, TimeoutError)):
+        logger.warning(f"Network transient error: {error_msg}")
+    elif isinstance(exception, ValueError):
+        logger.error(f"Invalid data input: {error_msg}")
+    else:
+        logger.critical(f"Unexpected system failure: {error_msg}", exc_info=True)
 
-        # Console output for visibility
-        console = logging.StreamHandler()
-        console.setFormatter(formatter)
-        logger.addHandler(console)
-
-    return logger
-
-# Default logger instance
-logger = setup_logger("crypto_tracker_65")
+def log_data_anomaly(metric: str, value: Any) -> None:
+    """Records unusual crypto market data for audit."""
+    logger.warning(f"Market anomaly detected: {metric} has invalid value: {value}")
